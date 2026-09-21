@@ -170,7 +170,7 @@ tests/             unit · integration · property · leakage · architecture ·
 | Command | What it does |
 |---|---|
 | `make demo` | Four algorithms, two styles, one table |
-| `make test` | The Python suite (~570 tests) |
+| `make test` | The Python suite (236 test functions; the architecture suite alone expands to 506 parametrised cases) |
 | `make test-differential` | Builds the C++ core and proves it matches Python |
 | `make research` | Grids A–E with bootstrap intervals and paired comparisons |
 | `make ml` | Fill-probability baselines plus two leakage checks |
@@ -252,9 +252,10 @@ Python ≥ 3.11. The C++ core needs a C++20 compiler and CMake ≥ 3.20; it is
 optional, and `make doctor` reports which backend is active.
 
 ```
-pytest         ~570 tests: unit, integration, property, leakage, architecture
-ruff + mypy    lint and type check
-hypothesis     property-based invariants on the book and the bootstrap
+pytest         236 test functions in six suites: unit, integration, property,
+               leakage, architecture, differential
+ruff + mypy    lint and type check, both clean
+hypothesis     property-based invariants on the book, the bootstrap and the split
 ```
 
 ## License
