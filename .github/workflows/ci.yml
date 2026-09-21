@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]"
+      - name: Lint
+        run: |
+          python -m ruff check src tests
+          python -m ruff format --check src tests
+      - name: Type check
+        run: python -m mypy src/tradeforge
+      - name: Tests
+        run: python -m pytest tests -q --cov=tradeforge --cov-report=xml
+      - name: Architecture rules
+        # A rule that is not enforced by a test is a preference, not an invariant.
+        run: python -m pytest tests/architecture -q
+      - name: Leakage checks
+        run: python -m pytest tests/leakage -q
+      - name: Environment report
+        run: python -m tradeforge.interfaces.cli doctor
+      - name: Demo smoke
+        run: python -m tradeforge.interfaces.cli demo
+
+  cpp:
+    name: C++ core (Release, unit tests, differential)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Python dependencies
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]" pybind11
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DTRADEFORGE_BUILD_TESTS=ON -DTRADEFORGE_FETCH_GTEST=ON
+          -DTRADEFORGE_BUILD_PYTHON=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: C++ unit tests
+        run: cd build && ctest --output-on-failure
+      - name: Python/C++ differential tests
+        # The parity suite is the contract in ADR-002. It has to run in CI, or
+        # the two implementations drift and nobody notices until a backtest is
+        # wrong for a reason nobody can find.
+        run: PYTHONPATH=build/python:src python -m pytest tests/differential -q
+
+  cpp-sanitizers:
+    name: C++ core (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >
+          cmake -S . -B build-san -DCMAKE_BUILD_TYPE=Debug
+          -DTRADEFORGE_BUILD_TESTS=ON -DTRADEFORGE_FETCH_GTEST=ON
+          -DTRADEFORGE_SANITIZE=ON -DTRADEFORGE_BUILD_PYTHON=OFF
+      - name: Build
+        run: cmake --build build-san --parallel
+      - name: Test
+        run: cd build-san && ctest --output-on-failure
+
+  reproducibility:
+    name: Reproducibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]"
+      - name: Same seed must reproduce the same execution
+        run: python -m pytest tests/integration -q -k "determinism or reproducible"
+      - name: Record the environment alongside the results
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tradeforge.research.registry import EnvironmentRecord
+
+          record = EnvironmentRecord.capture(Path("."))
+          Path("environment.json").write_text(json.dumps(record.to_dict(), indent=2))
+          print(json.dumps(record.to_dict(), indent=2))
+          if record.git_commit == "unknown":
+              raise SystemExit("git commit could not be determined; results would not be traceable")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: environment
+          path: environment.json

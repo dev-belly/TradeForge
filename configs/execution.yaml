@@ -1,0 +1,65 @@
+# Execution configuration: parent orders, default policies and child placement.
+
+parent_order:
+  symbol: "SYNTH"
+  side: "BUY"
+  quantity_base: 20000
+  # Times are offsets from session start, in nanoseconds.
+  start_offset_ns: 0
+  end_offset_ns: 1800000000000        # 30 minutes
+  urgency: 0.5                        # 0 = passive, 1 = aggressive
+  participation_limit: 0.05
+  limit_price: null                   # null = no limit
+
+policies:
+  twap:
+    n_slices: 30
+    # Rounding of child size down to lot size; remainder goes to the last slice.
+    round_to_lot: true
+    # What to do with unfilled quantity at window end.
+    end_of_window: "sweep_marketable"   # sweep_marketable | cancel | leave
+
+  vwap:
+    n_slices: 30
+    # historical | causal_realtime. `historical` uses PRIOR sessions only;
+    # using the current session's realized curve raises LeakageError.
+    profile_source: "historical"
+    historical_lookback_sessions: 5
+    end_of_window: "sweep_marketable"
+
+  pov:
+    # Target participation against OBSERVED market volume only.
+    target_rate: 0.05
+    min_slice_base: 100
+    max_slice_base: 2000
+    rebalance_interval_ns: 60000000000   # 1 minute
+    end_of_window: "sweep_marketable"
+
+  is_baseline:
+    # Simplified Almgren-Chriss style front-loading.
+    #
+    # kappa = sqrt(risk_aversion * sigma^2 / eta) with sigma = sigma_bps/10000.
+    # Time is measured in `time_unit_ns` (default 1 second) because kappa has
+    # units of 1/time. The dimensionless driver is kappa * T; with the values
+    # below and a 30-minute window it is ~1.27, i.e. visibly front-loaded.
+    # risk_aversion -> 0 recovers TWAP.
+    n_slices: 30
+    risk_aversion: 0.5
+    sigma_bps: 10.0
+    eta: 1.0
+    time_unit_ns: 1000000000
+    end_of_window: "sweep_marketable"
+
+child_placement:
+  # passive  : post at/inside the touch and wait for queue consumption
+  # aggressive: cross the spread immediately
+  # adaptive : passive when the model says fill is likely, else cross
+  default_style: "passive"
+  passive:
+    # Offset in ticks from the touch. 0 = join the best price.
+    price_offset_ticks: 0
+    # Cancel/repost if not filled within this horizon.
+    timeout_ns: 30000000000            # 30 seconds
+  aggressive:
+    # Sweep depth limit; null = no limit.
+    max_levels_crossed: null

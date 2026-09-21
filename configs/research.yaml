@@ -1,0 +1,75 @@
+# Standard research experiment grid.
+# Every run records config + git commit + seed into the experiment registry.
+
+experiments:
+  - name: "A_algorithm_comparison"
+    type: "algorithm"
+    algorithms: ["twap", "vwap", "pov", "is_baseline"]
+    repeats_per_day: 1
+
+  - name: "B_passive_vs_aggressive"
+    type: "style"
+    styles: ["passive", "aggressive"]
+
+  - name: "C_latency_sensitivity"
+    type: "latency"
+    grid_ns: [0, 100000, 500000, 1000000, 5000000, 10000000]
+
+  - name: "D_participation_sensitivity"
+    type: "participation"
+    rates: [0.001, 0.005, 0.01, 0.05, 0.10]
+
+  - name: "E_queue_sensitivity"
+    type: "queue"
+    policies: ["optimistic", "neutral", "conservative"]
+
+  - name: "F_regime"
+    type: "regime"
+    regimes: ["tight_spread", "wide_spread", "high_volatility", "low_volatility",
+              "high_depth", "low_depth", "balanced_book", "imbalanced_book"]
+
+statistics:
+  bootstrap:
+    # `block` is required WITHIN a session: consecutive executions are
+    # autocorrelated, and i.i.d. resampling would understate the interval.
+    # ACROSS sessions the resampling unit is one independent session, so the
+    # effective block length is 1 - see research/runner.py.
+    method: "block"
+    block_length: 50
+    n_resamples: 2000
+    confidence: 0.95
+    seed: 11
+  paired_comparison: true
+  # Sessions used per experiment cell. Cells are paired by seed.
+  seeds: [20260908, 20260909, 20260910, 20260911, 20260912]
+
+# Regime thresholds are ABSOLUTE, never quantiles of the sample under study.
+# Deriving thresholds from the data would be look-ahead.
+regimes:
+  spread_tight_max_ticks: 1
+  spread_wide_min_ticks: 3
+  volatility_high_min_bps: 5.0
+  volatility_low_max_bps: 1.0
+  depth_high_min_base: 5000
+  depth_low_max_base: 1500
+  imbalance_abs_high: 0.5
+  depth_levels: 5
+
+ml:
+  # Baselines must be trained before any non-linear model is reported.
+  baselines: ["mid", "imbalance_threshold", "logistic_regression", "ridge"]
+  models: ["logistic_regression", "ridge"]
+  # Purged, time-ordered split. Shuffling is forbidden.
+  split:
+    train_frac: 0.6
+    validation_frac: 0.2
+    test_frac: 0.2
+    # Purge margin at each boundary, in NANOSECONDS. The effective purge is
+    # max(horizon_ns, embargo_ns) converted to samples, so this must be at
+    # least as long as the label horizon. Do not express this in "events":
+    # samples-per-event depends on the sampling interval.
+    embargo_ns: 60000000000        # 60 s = 2x the label horizon
+  targets: ["fill_within_horizon"]
+  horizon_ns: 30000000000          # 30 s forward label window
+  sample_interval_ns: 5000000000   # one sample every 5 s
+  seed: 23

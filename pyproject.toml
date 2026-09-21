@@ -1,0 +1,128 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tradeforge"
+version = "0.1.0"
+description = "Event-driven market microstructure and algorithmic execution research platform with a C++ limit-order-book engine and Python research layer."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "TradeForge Contributors" }]
+keywords = [
+  "quantitative-finance",
+  "market-microstructure",
+  "limit-order-book",
+  "execution-algorithms",
+  "transaction-cost-analysis",
+  "algorithmic-trading",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "pyarrow>=12.0",
+  "PyYAML>=6.0",
+  "duckdb>=0.9",
+  "typer>=0.9",
+  "rich>=13.0",
+  "matplotlib>=3.7",
+  "scikit-learn>=1.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "hypothesis>=6.80",
+  "ruff>=0.5",
+  "mypy>=1.5",
+]
+api = ["fastapi>=0.100", "uvicorn>=0.23"]
+dashboard = ["streamlit>=1.25"]
+full = ["fastapi>=0.100", "uvicorn>=0.23", "streamlit>=1.25"]
+
+[project.scripts]
+tradeforge = "tradeforge.interfaces.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tradeforge = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "slow: marks tests as slow",
+  "cpp: requires the compiled C++ extension",
+  "network: requires network access",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["src/tradeforge"]
+omit = ["*/tests/*", "*/__main__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "@abstractmethod",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4", "RUF"]
+ignore = [
+    # Typer and FastAPI both use call-in-default, which is the documented idiom.
+    "B008",
+    # Class-level mutable defaults are used deliberately in a few dataclasses
+    # where a factory would obscure the intent.
+    "RUF012",
+    # An if/else that assigns is frequently clearer than a nested conditional
+    # expression. Ruff's suggestion is sometimes a triple-nested ternary;
+    # readability wins over terseness here.
+    "SIM108",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test names mirror the behaviour under test, which is not always snake_case
+# when the behaviour has a proper name (e.g. test_FIFO_consumption).
+"tests/*" = ["N802", "B011"]
+# The example and benchmark scripts insert `src/` into sys.path so they run from
+# a checkout without an install. That has to happen before the package import,
+# which is exactly what E402 flags.
+"examples/*" = ["E402"]
+"benchmarks/*" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_any_generics = false
+check_untyped_defs = true
+no_implicit_optional = true
+ignore_missing_imports = false
+exclude = ["build/", "cpp/"]
+plugins = []
+
+[[tool.mypy.overrides]]
+module = ["pandas.*", "numpy.*", "duckdb.*", "matplotlib.*", "sklearn.*", "streamlit.*", "fastapi.*", "uvicorn.*", "hypothesis.*", "yaml.*"]
+ignore_missing_imports = true

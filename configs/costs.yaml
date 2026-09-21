@@ -1,0 +1,37 @@
+# Explicit, configurable transaction costs. Never hard-coded in core logic.
+
+fees:
+  # Per-notional bps, plus optional per-share component.
+  taker_fee_bps: 1.5
+  maker_fee_bps: 0.0
+  # Positive = rebate (cost reduction) for providing liquidity.
+  maker_rebate_bps: 0.2
+  commission_per_share: 0.0005
+  min_commission_per_order: 0.0
+  currency: "USD"
+
+spread:
+  # Aggressive fills pay the crossing cost relative to the decision-time mid.
+  # Computed from the book, never assumed.
+  charge_half_spread_to_taker: true
+
+slippage:
+  # Slippage is an OUTPUT of the simulation (queue, latency, book state),
+  # not a number we invent here. This block only controls reporting units.
+  report_in_bps: true
+
+# Benchmarks computed for every execution.
+benchmarks:
+  - arrival_price
+  - interval_vwap
+  - interval_twap
+  - interval_mid
+
+tca:
+  # Post-fill markout horizons, in nanoseconds. These are POST-TRADE
+  # measurements: they require data after the execution window, so the replay
+  # runs past the window end for `max(markout_horizons_ns)`.
+  markout_horizons_ns: [1000000000, 10000000000, 60000000000, 300000000000]
+  # Report the residual of the cost decomposition explicitly. Never relabel it
+  # as a measured market impact.
+  report_residual_impact: true

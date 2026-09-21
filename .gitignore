@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+.venv/
+venv/
+
+# C++ (the compiled core is a build product; build it with `make build-cpp`)
+cpp/build/
+cpp/build-san/
+*.so
+*.dylib
+*.pyd
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+
+# Generated artefacts. Reproducible with `make demo`, `make research`,
+# `make run-all`, `make report` and `make benchmark`. Committing them would
+# let a stale number survive a code change.
+artifacts/
+reports/
+benchmarks/*.json
+
+# Normalized market data is regenerated, never committed. See data/README.md.
+data/*
+!data/README.md
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Notebooks
+.ipynb_checkpoints/

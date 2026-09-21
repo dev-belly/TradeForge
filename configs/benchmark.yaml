@@ -1,0 +1,25 @@
+# Benchmark configuration. Numbers in the README come from artifacts only.
+
+benchmark:
+  warmup_runs: 3
+  measured_runs: 10
+  # Synthetic event stream size used for throughput benchmarks.
+  n_events: 200000
+  book_depth: 10
+  # Recorded alongside every result.
+  record_environment: true
+
+targets:
+  - "event_decode"
+  - "book_update"
+  - "matching"
+  - "replay_throughput"
+  - "snapshot"
+  - "python_cpp_boundary"
+
+output:
+  dir: "artifacts/benchmarks"
+  format: "json"
+
+# Local microbenchmarks are NOT exchange latency.
+disclaimer: "Local microbenchmark. Not comparable to exchange or network latency."

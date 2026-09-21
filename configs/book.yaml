@@ -1,0 +1,25 @@
+# Order book reconstruction configuration.
+
+book:
+  # MBP (market-by-price, aggregated levels) | MBO (market-by-order, needs L3)
+  mode: "MBP"
+  # Snapshot depth retained for metrics and reporting.
+  snapshot_depth: 10
+  # Maximum number of price levels tracked per side before truncation.
+  max_levels_per_side: 500
+
+invariants:
+  # STRICT | WARN | REPAIR
+  on_crossed_book: "STRICT"
+  on_negative_depth: "STRICT"
+  on_unknown_order_id: "STRICT"
+  on_locked_market: "WARN"
+
+# What happens to an order's queue position when its size changes.
+# Some venues preserve priority for size-decreasing modifies; the default is
+# the conservative behaviour: any change loses priority beyond remaining size.
+modify_priority_policy: "LOSE_PRIORITY"
+
+# Trade events consume the resting side. If a trade price is outside the
+# reconstructed book, this is a reconstruction error, not a rounding error.
+trade_price_tolerance_ticks: 0
