@@ -128,9 +128,13 @@ ignore_missing_imports = false
 exclude = ["build/", "cpp/"]
 plugins = []
 
-# Third-party packages that ship no stubs and no `py.typed` marker. Analysing
-# them is impossible, so their internals are opaque; our own code around them is
-# still fully checked.
+# Third-party packages that genuinely ship no stubs and no `py.typed` marker.
+# Analysing their internals is impossible, so they are opaque; our own code
+# around them is still fully checked.
+#
+# Deliberately NOT in this list: fastapi, pydantic, streamlit, uvicorn. All four
+# ship `py.typed`, so ignoring them would silently disable checking of the whole
+# interface layer. CI installs `.[dev,full]` so they are present and analysed.
 [[tool.mypy.overrides]]
 module = [
   "pandas.*",
@@ -138,9 +142,6 @@ module = [
   "duckdb.*",
   "matplotlib.*",
   "sklearn.*",
-  "streamlit.*",
-  "fastapi.*",
-  "uvicorn.*",
   "hypothesis.*",
   "yaml.*",
   "pyarrow.*",
