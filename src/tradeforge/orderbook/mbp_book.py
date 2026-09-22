@@ -94,19 +94,22 @@ class MbpBook:
             self._observe(event)
             return
 
-        self._require_price_and_quantity(event)
-        if self._spec is not None:
-            self._check_band(event)
+        if event.event_type is not EventType.CLEAR:
+            price, quantity = self._require_price_and_quantity(event)
+            if self._spec is not None:
+                self._check_band(event, price)
+        else:
+            price = quantity = 0
 
         self._bump(event)
         if event.event_type is EventType.ADD:
-            self._side_for(event).add(event.price_ticks, event.quantity_base)
+            self._side_for(event).add(price, quantity)
         elif event.event_type is EventType.CANCEL:
-            self._side_for(event).remove(event.price_ticks, event.quantity_base)
+            self._side_for(event).remove(price, quantity)
         elif event.event_type is EventType.SNAPSHOT:
-            self._side_for(event).set_level(event.price_ticks, event.quantity_base)
+            self._side_for(event).set_level(price, quantity)
         elif event.event_type is EventType.TRADE:
-            self._apply_trade(event)
+            self._apply_trade(event, price, quantity)
         elif event.event_type is EventType.CLEAR:
             self._bids.clear()
             self._asks.clear()
@@ -135,7 +138,7 @@ class MbpBook:
 
     # -------------------------------------------------------------- internal
 
-    def _apply_trade(self, event: MarketEvent) -> None:
+    def _apply_trade(self, event: MarketEvent, price: int, quantity: int) -> None:
         aggressor = event.aggressor_side() or event.side
         if aggressor is None:
             if self._settings.unknown_aggressor_policy == "strict":
@@ -146,16 +149,16 @@ class MbpBook:
             return  # skip: record-only trade
         resting = aggressor.opposite
         levels = self._bids if resting is Side.BUY else self._asks
-        available = levels.quantity_at(event.price_ticks)
-        if available < event.quantity_base:
+        available = levels.quantity_at(price)
+        if available < quantity:
             message = (
-                f"trade of {event.quantity_base} at {event.price_ticks} exceeds "
+                f"trade of {quantity} at {price} exceeds "
                 f"reconstructed depth {available} on {resting.value} side"
             )
             self._handle(InvariantViolation.TRADE_EXCEEDS_DEPTH, message, event)
-            levels.remove(event.price_ticks, available)
+            levels.remove(price, available)
             return
-        levels.remove(event.price_ticks, event.quantity_base)
+        levels.remove(price, quantity)
 
     def _side_for(self, event: MarketEvent) -> SideLevels:
         if event.side is Side.BUY:
@@ -175,24 +178,31 @@ class MbpBook:
         self._last_sequence_id = event.sequence_id
         self._last_timestamp_ns = event.exchange_timestamp_ns
 
-    def _require_price_and_quantity(self, event: MarketEvent) -> None:
-        if event.event_type is EventType.CLEAR:
-            return
-        if event.price_ticks is None or event.quantity_base is None:
+    def _require_price_and_quantity(self, event: MarketEvent) -> tuple[int, int]:
+        """Validate and return `(price_ticks, quantity_base)` as non-optional ints.
+
+        Returning the narrowed values rather than `None` is what lets the type
+        checker see the invariant the runtime already enforces. The previous
+        version raised on a missing price but returned nothing, so every later
+        `event.price_ticks` was still typed `int | None` and mypy flagged two
+        dozen arithmetic errors in code that could not actually fail.
+        """
+        price = event.price_ticks
+        quantity = event.quantity_base
+        if price is None or quantity is None:
             raise BookIntegrityError(
                 f"{event.event_type.value} event missing price/quantity (seq={event.sequence_id})"
             )
-        if event.quantity_base <= 0:
-            raise BookIntegrityError(
-                f"non-positive quantity {event.quantity_base} (seq={event.sequence_id})"
-            )
+        if quantity <= 0:
+            raise BookIntegrityError(f"non-positive quantity {quantity} (seq={event.sequence_id})")
+        return price, quantity
 
-    def _check_band(self, event: MarketEvent) -> None:
-        if self._spec is None or event.price_ticks is None:
+    def _check_band(self, event: MarketEvent, price: int) -> None:
+        if self._spec is None:
             return
         message = ""
         try:
-            self._spec.validate_price_ticks(event.price_ticks)
+            self._spec.validate_price_ticks(price)
             return
         except BookIntegrityError as exc:
             message = str(exc)

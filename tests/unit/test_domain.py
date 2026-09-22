@@ -10,6 +10,7 @@ from tradeforge.domain.capability import Capability, describe, require, supports
 from tradeforge.domain.enums import (
     DataType,
     EventType,
+    LiquidityFlag,
     OrderStatus,
     OrderType,
     Side,
@@ -20,7 +21,7 @@ from tradeforge.domain.exceptions import (
     InstrumentError,
     OrderStateError,
 )
-from tradeforge.domain.fills import markout_bps, signed_cost_bps
+from tradeforge.domain.fills import Fill, markout_bps, signed_cost_bps
 from tradeforge.domain.instrument import InstrumentSpec
 from tradeforge.domain.orders import ChildOrder
 
@@ -94,6 +95,28 @@ class TestSignConventions:
     def test_markout_rejects_non_positive_price(self):
         with pytest.raises(ValueError):
             markout_bps(Side.BUY, 0.0, 10_000.0)
+
+    def test_fill_notional_is_callable(self):
+        """Regression: `notional` was declared `@property` while taking a
+        `tick_size`, so any call raised TypeError. A property cannot accept
+        arguments, and nothing called it, so the bug survived unnoticed."""
+        from decimal import Decimal
+
+        fill = Fill(
+            fill_id=1,
+            order_id=1,
+            client_order_id="c",
+            parent_order_id="p",
+            symbol="TEST",
+            side=Side.BUY,
+            price_ticks=10_005,
+            quantity_base=200,
+            timestamp_ns=0,
+            liquidity_flag=LiquidityFlag.MAKER,
+            fee=Decimal("0"),
+            sequence_id=1,
+        )
+        assert fill.notional(Decimal("0.01")) == Decimal("20010.00")
 
 
 class TestOrderStateMachine:

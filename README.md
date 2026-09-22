@@ -264,7 +264,8 @@ sentence rather than printing a traceback.
 ```
 pytest         249 test functions in six suites: unit, integration, property,
                leakage, architecture, differential
-ruff + mypy    lint and type check, both clean
+ruff + mypy    lint and type check, both clean. `make typecheck` and
+               `make lint` are the commands CI runs; both pass locally too.
 hypothesis     property-based invariants on the book, the bootstrap and the split
 ```
 

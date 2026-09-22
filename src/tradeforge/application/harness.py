@@ -355,7 +355,7 @@ class ExecutionHarness:
             spec=wiring.spec,
             oms=wiring.oms,
             policy=wiring.policy,
-            book=wiring.book,  # type: ignore[arg-type]
+            book=wiring.book,
             queue_model=wiring.queue_model,
             latency=wiring.latency,
             guards=wiring.guards,

@@ -17,9 +17,25 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
+
+
+class Estimator(Protocol):
+    """The slice of the scikit-learn estimator API this layer actually uses.
+
+    Narrow on purpose: `fit`, `predict` and `predict_proba`. Typing these as
+    `object` made every call a type error, and the one `type: ignore` that
+    papered it over was itself flagged as unused once pyarrow and friends were
+    added to the ignore list.
+    """
+
+    def fit(self, features: np.ndarray, labels: np.ndarray) -> object: ...
+
+    def predict(self, features: np.ndarray) -> np.ndarray: ...
+
+    def predict_proba(self, features: np.ndarray) -> np.ndarray: ...
 
 
 class FillProbabilityModel(Protocol):
@@ -120,7 +136,7 @@ class MidModel:
 
     def __init__(self, feature_index: int) -> None:
         self._index = feature_index
-        self._model = _logistic()
+        self._model: Estimator = _logistic()
         self._scaler = Standardizer()
 
     @property
@@ -180,7 +196,7 @@ class LogisticRegressionModel:
     """L2-regularised logistic regression on the full feature vector."""
 
     def __init__(self, *, max_iter: int = 1000, c: float = 1.0, seed: int = 0) -> None:
-        self._model = _logistic(max_iter=max_iter, c=c, seed=seed)
+        self._model: Estimator = _logistic(max_iter=max_iter, c=c, seed=seed)
         self._scaler = Standardizer()
 
     @property
@@ -217,7 +233,7 @@ class RidgeModel:
     def __init__(self, *, alpha: float = 1.0) -> None:
         from sklearn.linear_model import Ridge
 
-        self._model = Ridge(alpha=alpha)
+        self._model: Estimator = cast(Estimator, Ridge(alpha=alpha))
         self._scaler = Standardizer()
 
     @property
@@ -241,14 +257,14 @@ class RidgeModel:
 # ------------------------------------------------------------------- helpers
 
 
-def _logistic(max_iter: int = 1000, c: float = 1.0, seed: int = 0) -> object:
+def _logistic(max_iter: int = 1000, c: float = 1.0, seed: int = 0) -> Estimator:
     from sklearn.linear_model import LogisticRegression
 
-    return LogisticRegression(max_iter=max_iter, C=c, random_state=seed)
+    return cast(Estimator, LogisticRegression(max_iter=max_iter, C=c, random_state=seed))
 
 
-def _probabilities(model: object, features: np.ndarray) -> np.ndarray:
-    proba = model.predict_proba(features)  # type: ignore[attr-defined]
+def _probabilities(model: Estimator, features: np.ndarray) -> np.ndarray:
+    proba = model.predict_proba(features)
     return np.asarray(proba)[:, 1]
 
 

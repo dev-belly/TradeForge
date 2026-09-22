@@ -43,7 +43,7 @@ def null_auc_standard_error(n_positive: int, n_negative: int) -> float | None:
     return float(np.sqrt((n + 1) / (12.0 * n_positive * n_negative)))
 
 
-def canary_tolerance(labels: Sequence[int]) -> float:
+def canary_tolerance(labels: Sequence[int] | np.ndarray) -> float:
     """Tolerance for the leakage canary, derived from the sample at hand."""
     y = np.asarray(labels)
     se = null_auc_standard_error(int(np.sum(y == 1)), int(np.sum(y == 0)))
@@ -151,7 +151,9 @@ class LeakageCanary:
         }
 
 
-def roc_auc(labels: Sequence[int], scores: Sequence[float]) -> float | None:
+def roc_auc(
+    labels: Sequence[int] | np.ndarray, scores: Sequence[float] | np.ndarray
+) -> float | None:
     """AUC via the Mann-Whitney U statistic, with average ranks for ties."""
     y = np.asarray(labels, dtype=float)
     s = np.asarray(scores, dtype=float)

@@ -31,8 +31,15 @@ class Fill:
     queue_wait_ns: int = 0
     sequence_id: int = 0
 
-    @property
-    def notional_at(self, tick_size: Decimal) -> Decimal:
+    def notional(self, tick_size: Decimal) -> Decimal:
+        """Exact notional for this fill. A method, not a property.
+
+        It was declared `@property` while taking `tick_size`, so any call would
+        have raised `TypeError: 'Decimal' object is not callable` - a property
+        cannot accept arguments. Nothing called it, which is exactly why it
+        survived: dead code that fails is worse than dead code that does not,
+        because it looks usable.
+        """
         return Decimal(self.price_ticks) * tick_size * Decimal(self.quantity_base)
 
 

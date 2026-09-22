@@ -12,7 +12,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from ..domain.enums import EventType, Side
+from ..domain.enums import EventFlag, EventType, Side
 from ..domain.events import MarketEvent
 
 SCHEMA = pa.schema(
@@ -90,7 +90,5 @@ def _opt_int(value: Any) -> int | None:
     return int(value)
 
 
-def _opt_flags(value: Any) -> int:
-    from ..domain.enums import EventFlag
-
+def _opt_flags(value: Any) -> EventFlag:
     return EventFlag(int(value)) if value is not None else EventFlag.NONE

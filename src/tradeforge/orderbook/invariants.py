@@ -6,9 +6,11 @@ from configuration, never from a hard-coded branch in the book.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import Enum
 
 from ..domain.enums import ValidationMode
+from ..domain.events import MarketEvent
 
 
 class InvariantViolation(Enum):
@@ -16,6 +18,7 @@ class InvariantViolation(Enum):
     LOCKED_MARKET = "locked_market"
     NEGATIVE_DEPTH = "negative_depth"
     UNKNOWN_ORDER_ID = "unknown_order_id"
+    DUPLICATE_ORDER_ID = "duplicate_order_id"
     TRADE_EXCEEDS_DEPTH = "trade_exceeds_depth"
     PRICE_OUT_OF_BAND = "price_out_of_band"
 
@@ -59,3 +62,10 @@ def should_raise(
     """STRICT raises; WARN/REPAIR are reported to the caller's hook."""
     mode = modes.get(violation, ValidationMode.STRICT)
     return mode is ValidationMode.STRICT
+
+
+#: Called for every invariant violation the book tolerates. Declared here rather
+#: than in one of the book modules so that MBP and MBO share one signature - they
+#: previously differed, and the MBO hook was never invoked at all, so violations
+#: found during order-level reconstruction never reached the replay outcome.
+ViolationHook = Callable[[InvariantViolation, str, MarketEvent], None]

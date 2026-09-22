@@ -253,7 +253,7 @@ def _compare(
 ) -> tuple[PairedComparison, ...]:
     """Pair every cell against the declared baseline, on identical seeds."""
     if spec.baseline is None or spec.baseline not in values:
-        return []
+        return ()
     baseline_values = values[spec.baseline]
     comparisons: list[PairedComparison] = []
     for cell in spec.cells:

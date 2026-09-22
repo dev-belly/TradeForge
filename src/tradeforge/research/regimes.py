@@ -87,22 +87,25 @@ def classify_state(
         if realized_vol_bps <= thresholds.volatility_low_max_bps:
             labels.add(RegimeLabel.LOW_VOLATILITY)
 
-    depth = state.bid_levels and sum(
-        level.quantity_base for level in state.bid_levels[: thresholds.depth_levels]
-    )
+    # `state.bid_levels and sum(...)` was a short-circuit guard that returned the
+    # empty tuple rather than 0 when there were no bids, so a one-sided book hit
+    # `tuple + int` and raised TypeError instead of being classified. Sum each
+    # side unconditionally; the two-sided tests below handle the rest.
+    depth = sum(level.quantity_base for level in state.bid_levels[: thresholds.depth_levels])
     ask_depth = sum(level.quantity_base for level in state.ask_levels[: thresholds.depth_levels])
-    if depth is not None:
-        two_sided = depth + ask_depth
-        if two_sided >= thresholds.depth_high_min_base:
-            labels.add(RegimeLabel.HIGH_DEPTH)
-        if 0 < two_sided <= thresholds.depth_low_max_base:
-            labels.add(RegimeLabel.LOW_DEPTH)
-        if two_sided > 0:
-            imbalance = (depth - ask_depth) / two_sided
-            if abs(imbalance) >= thresholds.imbalance_abs_high:
-                labels.add(RegimeLabel.IMBALANCED_BOOK)
-            else:
-                labels.add(RegimeLabel.BALANCED_BOOK)
+    two_sided = depth + ask_depth
+    if two_sided >= thresholds.depth_high_min_base:
+        labels.add(RegimeLabel.HIGH_DEPTH)
+    if 0 < two_sided <= thresholds.depth_low_max_base:
+        labels.add(RegimeLabel.LOW_DEPTH)
+    # Imbalance needs both sides to be observable. With one side empty the ratio
+    # would be ±1 by construction, which says nothing about the book.
+    if depth > 0 and ask_depth > 0:
+        imbalance = (depth - ask_depth) / two_sided
+        if abs(imbalance) >= thresholds.imbalance_abs_high:
+            labels.add(RegimeLabel.IMBALANCED_BOOK)
+        else:
+            labels.add(RegimeLabel.BALANCED_BOOK)
 
     return frozenset(labels)
 

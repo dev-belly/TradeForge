@@ -11,8 +11,8 @@ queue model instead - never this class.
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import NoReturn
 
 from ..domain.book import BookSnapshot, PriceLevel
 from ..domain.enums import DataType, EventType, Side
@@ -20,6 +20,7 @@ from ..domain.events import MarketEvent
 from ..domain.exceptions import BookIntegrityError, DataCapabilityError
 from ..domain.instrument import InstrumentSpec
 from .config import BookSettings
+from .invariants import InvariantViolation, ViolationHook
 from .levels import SideLevels
 
 
@@ -42,7 +43,7 @@ class MboBook:
         settings: BookSettings,
         declared_data_type: DataType,
         spec: InstrumentSpec | None = None,
-        on_violation: Callable[[str, str], None] | None = None,
+        on_violation: ViolationHook | None = None,
     ) -> None:
         if declared_data_type is not DataType.L3_MBO:
             raise DataCapabilityError(
@@ -175,102 +176,163 @@ class MboBook:
 
     # ------------------------------------------------------------- internal
 
+    # These three helpers exist so the type checker can see the invariants the
+    # runtime already enforces. The previous code used bare `assert` statements,
+    # which have two problems: `python -O` strips them, so a malformed event
+    # would silently corrupt the book in an optimised interpreter; and they
+    # narrowed only the two fields they mentioned, leaving `quantity_base` typed
+    # `int | None` everywhere downstream.
+
+    @staticmethod
+    def _require_side_price_quantity(event: MarketEvent) -> tuple[Side, int, int]:
+        side = event.side
+        price = event.price_ticks
+        quantity = event.quantity_base
+        if side is None or price is None or quantity is None:
+            raise BookIntegrityError(
+                f"{event.event_type.value} event missing side/price/quantity "
+                f"(seq={event.sequence_id})"
+            )
+        return side, price, quantity
+
+    @staticmethod
+    def _require_order_id(event: MarketEvent) -> int:
+        order_id = event.order_id
+        if order_id is None:
+            raise BookIntegrityError(
+                f"MBO {event.event_type.value} requires order_id (seq={event.sequence_id})"
+            )
+        return order_id
+
     def _add(self, event: MarketEvent) -> None:
-        assert event.side is not None and event.price_ticks is not None
-        if event.order_id is None:
-            raise BookIntegrityError(f"MBO ADD requires order_id (seq={event.sequence_id})")
-        if event.order_id in self._index:
-            raise BookIntegrityError(f"duplicate order id {event.order_id}")
-        queue = self._queues[event.side].setdefault(event.price_ticks, deque())
+        side, price, quantity = self._require_side_price_quantity(event)
+        order_id = self._require_order_id(event)
+        if order_id in self._index:
+            self._fail(
+                InvariantViolation.DUPLICATE_ORDER_ID,
+                f"duplicate order id {order_id} (seq={event.sequence_id})",
+                event,
+            )
+        queue = self._queues[side].setdefault(price, deque())
         queue.append(
             RestingOrder(
-                order_id=event.order_id,
-                quantity_base=event.quantity_base,
+                order_id=order_id,
+                quantity_base=quantity,
                 arrival_ns=event.exchange_timestamp_ns,
                 sequence_id=event.sequence_id,
             )
         )
-        self._index[event.order_id] = (event.side, event.price_ticks)
-        self._aggregates[event.side].add(event.price_ticks, event.quantity_base)
+        self._index[order_id] = (side, price)
+        self._aggregates[side].add(price, quantity)
 
     def _cancel(self, event: MarketEvent) -> None:
-        assert event.side is not None and event.price_ticks is not None
-        if event.order_id is None:
-            raise BookIntegrityError(f"MBO CANCEL requires order_id (seq={event.sequence_id})")
-        located = self._index.get(event.order_id)
+        _, _, quantity = self._require_side_price_quantity(event)
+        order_id = self._require_order_id(event)
+        located = self._index.get(order_id)
         if located is None:
-            raise BookIntegrityError(
-                f"cancel for unknown order id {event.order_id} (seq={event.sequence_id})"
+            self._fail(
+                InvariantViolation.UNKNOWN_ORDER_ID,
+                f"cancel for unknown order id {order_id} (seq={event.sequence_id})",
+                event,
             )
         side, price = located
         queue = self._queues[side][price]
-        target = next((o for o in queue if o.order_id == event.order_id), None)
-        if target is None:
-            raise BookIntegrityError(f"order {event.order_id} not present in level")
-        if target.quantity_base < event.quantity_base:
-            raise BookIntegrityError(
-                f"cancel {event.quantity_base} exceeds remaining {target.quantity_base}"
-            )
-        target.quantity_base -= event.quantity_base
-        self._aggregates[side].remove(price, event.quantity_base)
+        target = self._find(queue, order_id)
+        if target.quantity_base < quantity:
+            raise BookIntegrityError(f"cancel {quantity} exceeds remaining {target.quantity_base}")
+        target.quantity_base -= quantity
+        self._aggregates[side].remove(price, quantity)
         if target.quantity_base == 0:
             queue.remove(target)
-            del self._index[event.order_id]
+            del self._index[order_id]
             if not queue:
                 del self._queues[side][price]
 
     def _modify(self, event: MarketEvent) -> None:
         """Absolute quantity change. Priority is per `modify_priority_policy`."""
-        assert event.side is not None and event.price_ticks is not None
-        if event.order_id is None:
-            raise BookIntegrityError("MBO MODIFY requires order_id")
-        located = self._index.get(event.order_id)
+        _, _, quantity = self._require_side_price_quantity(event)
+        order_id = self._require_order_id(event)
+        located = self._index.get(order_id)
         if located is None:
-            raise BookIntegrityError(f"modify for unknown order id {event.order_id}")
+            self._fail(
+                InvariantViolation.UNKNOWN_ORDER_ID,
+                f"modify for unknown order id {order_id} (seq={event.sequence_id})",
+                event,
+            )
         side, price = located
         queue = self._queues[side][price]
-        target = next((o for o in queue if o.order_id == event.order_id), None)
-        if target is None:
-            raise BookIntegrityError(f"order {event.order_id} not present in level")
-        delta = event.quantity_base - target.quantity_base
+        target = self._find(queue, order_id)
+        delta = quantity - target.quantity_base
         if self._settings.modify_priority_policy == "KEEP_PRIORITY" and delta < 0:
             # Size decrease keeps priority in some venues; share survives.
             self._aggregates[side].remove(price, -delta)
-            target.quantity_base = event.quantity_base
+            target.quantity_base = quantity
             return
         # Default: lose priority -> cancel remaining and rejoin at the back.
         self._aggregates[side].remove(price, target.quantity_base)
         queue.remove(target)
-        del self._index[event.order_id]
+        del self._index[order_id]
         if not queue:
             del self._queues[side][price]
-        if event.quantity_base > 0:
+        if quantity > 0:
             self._add(event)
 
     def _execute(self, event: MarketEvent) -> None:
         """Consume liquidity from the front of the resting queue."""
-        assert event.price_ticks is not None
+        _, price, quantity = self._require_side_price_quantity(event)
         aggressor = event.aggressor_side() or event.side
         if aggressor is None:
             raise BookIntegrityError(
                 f"MBO TRADE requires an aggressor side (seq={event.sequence_id})"
             )
         resting = aggressor.opposite
-        queue = self._queues[resting].get(event.price_ticks)
+        queue = self._queues[resting].get(price)
         if queue is None:
-            raise BookIntegrityError(
-                f"execution at empty price {event.price_ticks} (seq={event.sequence_id})"
+            self._fail(
+                InvariantViolation.TRADE_EXCEEDS_DEPTH,
+                f"execution at empty price {price} (seq={event.sequence_id})",
+                event,
             )
-        remaining = event.quantity_base
+        remaining = quantity
         while remaining > 0:
+            if not queue:
+                self._fail(
+                    InvariantViolation.TRADE_EXCEEDS_DEPTH,
+                    f"execution of {quantity} at {price} exhausts the resting queue "
+                    f"with {remaining} unfilled (seq={event.sequence_id})",
+                    event,
+                )
             front = queue[0]
             taken = min(front.quantity_base, remaining)
             front.quantity_base -= taken
-            self._aggregates[resting].remove(event.price_ticks, taken)
+            self._aggregates[resting].remove(price, taken)
             remaining -= taken
             if front.quantity_base == 0:
                 queue.popleft()
                 self._index.pop(front.order_id, None)
                 if not queue:
-                    del self._queues[resting][event.price_ticks]
-                    break
+                    del self._queues[resting][price]
+
+    @staticmethod
+    def _find(queue: deque[RestingOrder], order_id: int) -> RestingOrder:
+        """The named order within a level. Raises rather than returning None."""
+        for order in queue:
+            if order.order_id == order_id:
+                return order
+        raise BookIntegrityError(f"order {order_id} not present in its level")
+
+    def _fail(self, violation: InvariantViolation, message: str, event: MarketEvent) -> NoReturn:
+        """Report through the shared hook, then raise.
+
+        An order-level book cannot continue past an integrity failure - an
+        unknown order id means the reconstructed queue is already wrong, and
+        guessing would corrupt every subsequent fill. So the hook is notified
+        and the error is raised; unlike the MBP book there is no WARN mode that
+        could meaningfully carry on. What matters is that the violation is
+        *recorded*, which it previously was not: `on_violation` was accepted by
+        the constructor and never called, so MBO violations were invisible in
+        `outcome.book_violations`.
+        """
+        if self._on_violation is not None:
+            self._on_violation(violation, message, event)
+        raise BookIntegrityError(f"{violation.value}: {message}")

@@ -225,6 +225,24 @@ class TestRegimes:
         assert RegimeLabel.HIGH_DEPTH in labels
         assert len(labels) >= 3
 
+    def test_one_sided_book_is_classified_rather_than_crashing(self):
+        """Regression: `state.bid_levels and sum(...)` returned the empty tuple.
+
+        With no bids that made `depth` a `tuple`, so `depth + ask_depth` raised
+        `TypeError: can only concatenate tuple (not "int") to tuple` instead of
+        classifying the state. A one-sided book is a normal thing to observe.
+        """
+        thresholds = RegimeThresholds()
+        no_bids = self._state(0, 10_001, 0, 5_000)
+        labels = classify_state(no_bids, thresholds)
+        assert RegimeLabel.HIGH_DEPTH in labels
+        # Imbalance is meaningless with one side empty, so it must not be claimed.
+        assert RegimeLabel.IMBALANCED_BOOK not in labels
+        assert RegimeLabel.BALANCED_BOOK not in labels
+
+        no_asks = self._state(9_999, 0, 5_000, 0)
+        assert RegimeLabel.HIGH_DEPTH in classify_state(no_asks, thresholds)
+
     def test_tally_counts_and_times_each_label(self):
         thresholds = RegimeThresholds()
         tally = RegimeTally()

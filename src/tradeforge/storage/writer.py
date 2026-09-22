@@ -28,8 +28,8 @@ try:  # pyarrow is an optional extra; the core must import without it
 
     _PYARROW_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only in minimal installs
-    pa = None  # type: ignore[assignment]
-    pq = None  # type: ignore[assignment]
+    pa = None
+    pq = None
     _PYARROW_AVAILABLE = False
 
 

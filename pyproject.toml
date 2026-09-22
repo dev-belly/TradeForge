@@ -111,7 +111,12 @@ ignore = [
 "benchmarks/*" = ["E402"]
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12 rather than 3.11: numpy's bundled stubs use PEP 695 `type` statements,
+# which mypy refuses to parse under python_version = 3.11. The result was that
+# mypy aborted with "errors prevented further checking" after seven unrelated
+# complaints, so the type check was effectively disabled. 3.12 is a supported
+# version (requires-python is >=3.11) and lets the check actually run.
+python_version = "3.12"
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -123,6 +128,21 @@ ignore_missing_imports = false
 exclude = ["build/", "cpp/"]
 plugins = []
 
+# Third-party packages that ship no stubs and no `py.typed` marker. Analysing
+# them is impossible, so their internals are opaque; our own code around them is
+# still fully checked.
 [[tool.mypy.overrides]]
-module = ["pandas.*", "numpy.*", "duckdb.*", "matplotlib.*", "sklearn.*", "streamlit.*", "fastapi.*", "uvicorn.*", "hypothesis.*", "yaml.*"]
+module = [
+  "pandas.*",
+  "numpy.*",
+  "duckdb.*",
+  "matplotlib.*",
+  "sklearn.*",
+  "streamlit.*",
+  "fastapi.*",
+  "uvicorn.*",
+  "hypothesis.*",
+  "yaml.*",
+  "pyarrow.*",
+]
 ignore_missing_imports = true

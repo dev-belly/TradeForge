@@ -155,6 +155,41 @@ class TestMboBook:
         assert level.quantity_base == 300
         assert level.order_count == 3
 
+    def test_violations_reach_the_shared_hook(self, mbo_settings):
+        """Regression: MboBook accepted `on_violation` and never called it.
+
+        Every order-level integrity failure was raised directly, so MBO
+        violations never appeared in `outcome.book_violations` - they were
+        invisible in exactly the place a reader would look for them. The hook
+        also had a different signature from MBP's, which is why nothing noticed.
+        """
+        from tradeforge.domain.enums import EventType
+        from tradeforge.domain.events import MarketEvent
+
+        seen: list[tuple[str, str]] = []
+        book = create_book(
+            symbol="TEST",
+            settings=mbo_settings,
+            data_type=DataType.L3_MBO,
+            on_violation=lambda violation, message, event: seen.append((violation.value, message)),
+        )
+        with pytest.raises(BookIntegrityError):
+            book.apply(
+                MarketEvent(
+                    sequence_id=1,
+                    exchange_timestamp_ns=1,
+                    symbol="TEST",
+                    event_type=EventType.CANCEL,
+                    side=Side.BUY,
+                    price_ticks=9_999,
+                    quantity_base=100,
+                    order_id=404,
+                    source="test",
+                )
+            )
+        assert seen, "the hook was not called for an unknown order id"
+        assert seen[0][0] == "unknown_order_id"
+
     def test_snapshot_event_is_meaningless_for_mbo(self, mbo_book):
         with pytest.raises(BookIntegrityError):
             mbo_book.apply(_event(0, EventType.SNAPSHOT, Side.BUY, 9_999, 100))

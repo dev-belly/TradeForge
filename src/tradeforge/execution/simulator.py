@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass
 from decimal import Decimal
+from functools import partial
 from typing import Protocol
 
 from ..domain.book import BookSnapshot, MarketState
@@ -38,7 +39,7 @@ from ..domain.enums import (
     TimeInForce,
 )
 from ..domain.events import MarketEvent
-from ..domain.exceptions import MatchingError
+from ..domain.exceptions import MatchingError, OrderStateError
 from ..domain.fills import ExecutionReport
 from ..domain.instrument import InstrumentSpec
 from ..domain.orders import ChildOrder, ParentOrder
@@ -308,7 +309,7 @@ class ExecutionSimulator:
         arrival_ns = self._latency.arrival_ns(decision_ns)
         self._clock.schedule(
             arrival_ns,
-            lambda at_ns, bound=order: self._arrive(bound, at_ns),
+            partial(self._arrive, order),
             label=f"arrive:{order.client_order_id}",
         )
 
@@ -373,8 +374,18 @@ class ExecutionSimulator:
                 )
                 self._record(report)
                 return
-            # DAY/GTC: the unfilled remainder rests at its limit price.
-            self._join_queue(order, arrival_ns, snapshot, price_ticks=order.price_ticks)
+            # DAY/GTC: the unfilled remainder rests at its limit price. A resting
+            # order must have a price; if it does not, the order was built wrong
+            # and joining a queue at an undefined price would corrupt the queue
+            # model silently.
+            resting_price = order.price_ticks
+            if resting_price is None:
+                raise OrderStateError(
+                    f"{order.order_type.value} order {order.client_order_id} reached the "
+                    "venue with no limit price, so it can neither rest nor be rejected "
+                    "meaningfully"
+                )
+            self._join_queue(order, arrival_ns, snapshot, price_ticks=resting_price)
 
     def _arrive_passive(self, order: ChildOrder, arrival_ns: int, snapshot: BookSnapshot) -> None:
         price = resting_price_ticks(snapshot, order.side, self._settings.passive_offset_ticks)
