@@ -251,6 +251,16 @@ for each, is in [`docs/design-review.md`](docs/design-review.md).
 Python ≥ 3.11. The C++ core needs a C++20 compiler and CMake ≥ 3.20; it is
 optional, and `make doctor` reports which backend is active.
 
+The Makefile uses whatever `python` resolves to. To use a virtual environment
+without activating it, pass the interpreter explicitly:
+
+```bash
+make demo PY=.venv/bin/python
+```
+
+If that interpreter cannot import the dependencies, `make` says so in one
+sentence rather than printing a traceback.
+
 ```
 pytest         236 test functions in six suites: unit, integration, property,
                leakage, architecture, differential

@@ -13,19 +13,34 @@
 .DEFAULT_GOAL := help
 
 PY        ?= python
-PYTEST    ?= $(PY) -m pytest
+PYTEST    ?= PYTHONPATH=src $(PY) -m pytest
+# Run the CLI from the source tree. This works with or without
+# `pip install -e .`, which matters because the first command a reader runs
+# should not require an install step.
+CLI        = PYTHONPATH=src $(PY) -m tradeforge.interfaces.cli
 CMAKE     ?= cmake
 BUILD     ?= build
 BUILD_SAN ?= build-san
 CONFIGS   ?= configs
 ARTIFACTS ?= artifacts
 
-.PHONY: help install install-full doctor build-cpp test test-python test-all test-cpp \
+.PHONY: help check-deps install install-full doctor build-cpp test test-python test-all test-cpp \
         test-differential sanitize lint format typecheck demo run-all research ml \
         benchmark report api dashboard db-init db-list db-query clean distclean
 
+# Fail with a sentence instead of a traceback when the interpreter is missing
+# the package's dependencies. Every CLI-dependent target depends on this.
+check-deps:
+	@$(PY) -c "import typer, yaml, numpy, pandas" 2>/dev/null || { \
+		echo "The interpreter '$(PY)' cannot import the package's dependencies."; \
+		echo "Run 'make install' first, or pass PY=/path/to/python."; \
+		exit 1; \
+	}
+
+# The help regex is basic, not extended: BSD grep and GNU grep disagree about
+# which quantifiers need -E, and this target has to work on both.
 help: ## Show the available targets
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
+	@grep -h '^[a-zA-Z_-]*:.*## ' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 # --------------------------------------------------------------------- setup
@@ -36,8 +51,8 @@ install: ## Install the package with development tooling
 install-full: ## Install everything, including the API and dashboard extras
 	$(PY) -m pip install -e ".[dev,full]"
 
-doctor: ## Report the engine backend and which optional extras are present
-	$(PY) -m tradeforge.interfaces.cli doctor --configs $(CONFIGS)
+doctor: check-deps ## Report the engine backend and which optional extras are present
+	$(CLI) doctor --configs $(CONFIGS)
 
 # ------------------------------------------------------------------ C++ core
 
@@ -88,44 +103,44 @@ typecheck: ## Static type check
 
 # ------------------------------------------------------------------ research
 
-demo: ## Run the four algorithms on synthetic data and compare them
-	$(PY) -m tradeforge.interfaces.cli demo --configs $(CONFIGS)
+demo: check-deps ## Run the four algorithms on synthetic data and compare them
+	$(CLI) demo --configs $(CONFIGS)
 
-run-all: ## Run a grid of executions and store the artefacts as Parquet
+run-all: check-deps ## Run a grid of executions and store the artefacts as Parquet
 	$(PY) -m benchmarks.run_runs --output $(ARTIFACTS)/runs --configs $(CONFIGS)
 
-research: ## Run the pre-registered experiment grids and record every cell
-	$(PY) -m tradeforge.interfaces.cli research run --experiment all --seeds 3 \
+research: check-deps ## Run the pre-registered experiment grids and record every cell
+	$(CLI) research run --experiment all --seeds 3 \
 		--output $(ARTIFACTS)/research --configs $(CONFIGS)
 
-ml: ## Fit the fill-probability baselines on a purged time split
-	$(PY) -m tradeforge.interfaces.cli ml fill-probability --configs $(CONFIGS)
+ml: check-deps ## Fit the fill-probability baselines on a purged time split
+	$(CLI) ml fill-probability --configs $(CONFIGS)
 
-benchmark: ## Measure throughput and write artifacts/benchmarks/*.json
+benchmark: check-deps ## Measure throughput and write artifacts/benchmarks/*.json
 	$(PY) -m benchmarks.run_benchmarks --output $(ARTIFACTS)/benchmarks
 
-report: ## Render the self-contained HTML reports
-	$(PY) -m tradeforge.interfaces.cli report --output $(ARTIFACTS)/reports \
+report: check-deps ## Render the self-contained HTML reports
+	$(CLI) report --output $(ARTIFACTS)/reports \
 		--configs $(CONFIGS)
 
 # ---------------------------------------------------------------- interfaces
 
 api: ## Start the HTTP API on 127.0.0.1:8000
-	$(PY) -m uvicorn tradeforge.interfaces.api:app --host 127.0.0.1 --port 8000
+	PYTHONPATH=src $(PY) -m uvicorn tradeforge.interfaces.api:app --host 127.0.0.1 --port 8000
 
 dashboard: ## Start the Streamlit dashboard (reads artefacts)
-	$(PY) -m streamlit run src/tradeforge/interfaces/dashboard.py
+	PYTHONPATH=src $(PY) -m streamlit run src/tradeforge/interfaces/dashboard.py
 
 # -------------------------------------------------------------------- storage
 
-db-init: ## Create the Parquet layout and verify the schema compiles
-	$(PY) -m tradeforge.interfaces.cli db init --root $(ARTIFACTS)/runs
+db-init: check-deps ## Create the Parquet layout and verify the schema compiles
+	$(CLI) db init --root $(ARTIFACTS)/runs
 
-db-list: ## List the packaged analytical queries
-	$(PY) -m tradeforge.interfaces.cli db list --sql-dir sql
+db-list: check-deps ## List the packaged analytical queries
+	$(CLI) db list --sql-dir sql
 
-db-query: ## Run one packaged query: make db-query NAME=01_execution_summary
-	$(PY) -m tradeforge.interfaces.cli db query $(NAME) --root $(ARTIFACTS)/runs --sql-dir sql
+db-query: check-deps ## Run one packaged query: make db-query NAME=01_execution_summary
+	$(CLI) db query $(NAME) --root $(ARTIFACTS)/runs --sql-dir sql
 
 # --------------------------------------------------------------------- clean
 
