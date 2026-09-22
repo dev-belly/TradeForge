@@ -1,8 +1,15 @@
 # TradeForge
 
+[![CI](https://github.com/dev-belly/TradeForge/actions/workflows/ci.yml/badge.svg)](https://github.com/dev-belly/TradeForge/actions/workflows/ci.yml)
+
 An event-driven market-microstructure and algorithmic-execution research platform:
 a C++20 limit-order-book core, a Python research layer, and a transaction-cost
 analysis stack that refuses to report a number it cannot justify.
+
+CI runs on Python 3.11, 3.12 and 3.13, builds the C++ core and runs the
+Python/C++ differential suite, repeats the C++ tests under AddressSanitizer and
+UndefinedBehaviorSanitizer, and checks that a seed reproduces an execution and
+that the git commit is determinable.
 
 The design goal is not "a backtest that produces good numbers". It is **a
 platform whose numbers can be trusted, including when they are disappointing**.
