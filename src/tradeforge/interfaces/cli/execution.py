@@ -223,8 +223,15 @@ def report(
             if context.tca is None:
                 typer.secho(f"  {run_id}: no TCA report, skipped", fg=typer.colors.YELLOW)
                 continue
+            # Pass the TCA report's provenance, not the harness's. Only the
+            # former carries queue_mode / latency_basis / counterfactual_mode,
+            # which the report prints as a badge above every number. Using the
+            # harness provenance left that badge reading "UNKNOWN" while the
+            # headline table below it said "APPROXIMATE".
             rendered.append(
-                builder.execution_report(context.tca, run_id=run_id, provenance=context.provenance)
+                builder.execution_report(
+                    context.tca, run_id=run_id, provenance=context.tca.provenance
+                )
             )
             is_bps = context.tca.metrics.implementation_shortfall_bps
             typer.echo(f"  {run_id}: {is_bps:+.3f} bps IS")
