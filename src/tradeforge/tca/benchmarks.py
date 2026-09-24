@@ -13,6 +13,7 @@ separate types with separate constructors.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 
 from ..domain.enums import BenchmarkKind
 from .observer import MarketObserver
@@ -73,20 +74,35 @@ class BenchmarkPrices:
 def compute_benchmarks(observer: MarketObserver, *, start_ns: int, end_ns: int) -> BenchmarkPrices:
     """Build every window benchmark from one observer.
 
-    `arrival_mid_ticks` is the first mid observed at or after the window opens.
-    Using the first observation *after* the start rather than the closest one
-    keeps it causal: it is a price we could actually have seen before deciding.
+    The observer may cover later events for markouts. Only observations inside
+    this execution window may contribute to its price or coverage benchmarks.
     """
-    arrival = observer.mid_at_or_after(start_ns)
+    if end_ns < start_ns:
+        raise ValueError("benchmark end_ns precedes start_ns")
+    mids = [m for m in observer.mids if start_ns <= m.timestamp_ns <= end_ns]
+    trades = [t for t in observer.trades if start_ns <= t.timestamp_ns <= end_ns]
+    volume = sum(t.quantity_base for t in trades)
+    twap: float | None = None
+    if mids:
+        twap = mids[0].mid_ticks
+        duration = mids[-1].timestamp_ns - mids[0].timestamp_ns
+        if duration > 0:
+            weighted = sum(
+                (left.mid_ticks + right.mid_ticks) * 0.5 * (right.timestamp_ns - left.timestamp_ns)
+                for left, right in pairwise(mids)
+            )
+            twap = weighted / duration
     return BenchmarkPrices(
         window_start_ns=start_ns,
         window_end_ns=end_ns,
-        arrival_mid_ticks=arrival,
-        interval_vwap_ticks=observer.volume_weighted_price(),
-        interval_twap_ticks=observer.time_weighted_mid(),
-        interval_mid_ticks=observer.mean_mid(),
-        terminal_mid_ticks=observer.mid_at_or_before(end_ns),
-        n_mid_observations=len(observer.mids),
-        n_trade_prints=len(observer.trades),
-        window_volume_base=observer.total_traded_volume(),
+        arrival_mid_ticks=mids[0].mid_ticks if mids else None,
+        interval_vwap_ticks=(
+            sum(t.price_ticks * t.quantity_base for t in trades) / volume if volume else None
+        ),
+        interval_twap_ticks=twap,
+        interval_mid_ticks=sum(m.mid_ticks for m in mids) / len(mids) if mids else None,
+        terminal_mid_ticks=mids[-1].mid_ticks if mids else None,
+        n_mid_observations=len(mids),
+        n_trade_prints=len(trades),
+        window_volume_base=volume,
     )

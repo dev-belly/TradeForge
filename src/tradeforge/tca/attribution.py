@@ -127,11 +127,9 @@ def compute_attribution(
         opportunity = signed_cost_bps(side, terminal, arrival)
 
     is_total: float | None = None
-    if is_filled is not None:
-        r = result.completion_rate
-        is_total = is_filled * r
-        if opportunity is not None:
-            is_total += opportunity * (1.0 - r)
+    r = result.completion_rate
+    if (r == 0 or is_filled is not None) and (r == 1 or opportunity is not None):
+        is_total = (is_filled or 0.0) * r + (opportunity or 0.0) * (1.0 - r)
 
     return CostAttribution(
         fill_ratio=result.completion_rate,

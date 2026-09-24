@@ -7,6 +7,7 @@ additive, and markouts use the system-wide sign convention.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
@@ -117,6 +118,31 @@ class TestBenchmarks:
         prices = compute_benchmarks(obs, start_ns=START, end_ns=END)
         assert prices.arrival_mid_ticks == 10_000.0
         assert prices.n_trade_prints == 1
+
+    def test_markout_observations_cannot_change_execution_benchmarks(self):
+        obs = MarketObserver(start_ns=START - 1, end_ns=END + 1)
+        obs.observe(_trade_event(START - 1, 50_000, 500), _state(START - 1, 49_999, 50_001))
+        obs.observe(_trade_event(START, 10_000, 100), _state(START, 9_999, 10_001))
+        obs.observe(_trade_event(END, 10_100, 300), _state(END, 10_099, 10_101))
+        obs.observe(_trade_event(END + 1, 80_000, 1_000), _state(END + 1, 79_999, 80_001))
+
+        prices = compute_benchmarks(obs, start_ns=START, end_ns=END)
+        assert prices.arrival_mid_ticks == 10_000
+        assert prices.terminal_mid_ticks == 10_100
+        assert prices.interval_vwap_ticks == pytest.approx(10_075)
+        assert prices.interval_twap_ticks == pytest.approx(10_050)
+        assert prices.interval_mid_ticks == pytest.approx(10_050)
+        assert prices.n_mid_observations == prices.n_trade_prints == 2
+        assert prices.window_volume_base == 400
+
+    def test_no_in_window_observation_gives_no_price_benchmark(self):
+        obs = MarketObserver(start_ns=START, end_ns=END + 1)
+        obs.observe(_trade_event(END + 1, 10_000, 100), _state(END + 1, 9_999, 10_001))
+        prices = compute_benchmarks(obs, start_ns=START, end_ns=END)
+        assert prices.arrival_mid_ticks is None
+        assert prices.terminal_mid_ticks is None
+        assert prices.interval_vwap_ticks is None
+        assert prices.n_mid_observations == prices.n_trade_prints == 0
 
     def test_benchmark_lookup_by_kind(self, observer):
         prices = compute_benchmarks(observer, start_ns=START, end_ns=END)
@@ -245,6 +271,32 @@ class TestMetricsAndAttribution:
         partial = compute_cost_metrics(self._result(filled=500), benchmarks, spec)
         full = compute_cost_metrics(self._result(filled=1_000), benchmarks, spec)
         assert partial.implementation_shortfall_bps != full.implementation_shortfall_bps
+
+    def test_unmeasurable_shortfall_is_not_reported_as_zero(self, observer):
+        benchmarks = compute_benchmarks(observer, start_ns=START, end_ns=END)
+        spec = InstrumentSpec("TEST", Decimal("0.01"), 1, "USD", 5_000, 20_000)
+        no_close = replace(benchmarks, terminal_mid_ticks=None)
+        partial = self._result(filled=500)
+        metrics = compute_cost_metrics(partial, no_close, spec)
+        attribution = compute_attribution(partial, no_close, observer, spec)
+        assert metrics.implementation_shortfall_bps is None
+        assert attribution.is_total_bps is None
+
+        no_fill = self._result(avg_fill=None, filled=0)
+        assert compute_cost_metrics(no_fill, no_close, spec).implementation_shortfall_bps is None
+        assert compute_attribution(no_fill, no_close, observer, spec).is_total_bps is None
+
+        complete = self._result(filled=1_000)
+        complete_metrics = compute_cost_metrics(complete, no_close, spec)
+        assert complete_metrics.implementation_shortfall_bps is not None
+        assert compute_attribution(complete, no_close, observer, spec).is_total_bps is not None
+
+        opportunity_only = compute_cost_metrics(no_fill, benchmarks, spec)
+        assert opportunity_only.implementation_shortfall_bps is not None
+        attribution = compute_attribution(no_fill, benchmarks, observer, spec)
+        assert attribution.is_total_bps == pytest.approx(
+            opportunity_only.implementation_shortfall_bps
+        )
 
     def test_attribution_is_additive(self, observer):
         benchmarks = compute_benchmarks(observer, start_ns=START, end_ns=END)

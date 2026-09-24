@@ -158,10 +158,18 @@ def _implementation_shortfall(
     """
     if arrival is None or arrival <= 0:
         return None
-    filled_part = 0.0
-    if avg_fill is not None and fill_ratio > 0:
-        filled_part = signed_cost_bps(side, avg_fill, arrival) * fill_ratio
-    unfilled_part = 0.0
-    if terminal is not None and fill_ratio < 1.0:
-        unfilled_part = signed_cost_bps(side, terminal, arrival) * (1.0 - fill_ratio)
+    if fill_ratio > 0 and avg_fill is None:
+        return None
+    if fill_ratio < 1.0 and terminal is None:
+        return None
+    filled_part = (
+        signed_cost_bps(side, avg_fill, arrival) * fill_ratio
+        if avg_fill is not None and fill_ratio > 0
+        else 0.0
+    )
+    unfilled_part = (
+        signed_cost_bps(side, terminal, arrival) * (1.0 - fill_ratio)
+        if terminal is not None and fill_ratio < 1.0
+        else 0.0
+    )
     return filled_part + unfilled_part
