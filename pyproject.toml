@@ -142,7 +142,6 @@ module = [
   "duckdb.*",
   "matplotlib.*",
   "sklearn.*",
-  "hypothesis.*",
   "yaml.*",
   "pyarrow.*",
 ]

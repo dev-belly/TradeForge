@@ -292,6 +292,136 @@ class TestEvaluation:
         assert all(bin_.n > 0 for bin_ in report.calibration)
 
 
+class TestPairedLiftInterval:
+    """The lift is a paired difference, and it is reported with an interval.
+
+    This exists because the README once claimed "logistic regression and ridge
+    score at or below the base rate", which was false - ridge scores above it by
+    0.94 percentage points. The point estimate had been quoted with no interval,
+    which is how a fraction of a percentage point came to look like a finding.
+    """
+
+    @staticmethod
+    def _interval(predictions: np.ndarray, labels: np.ndarray):
+        from tradeforge.ml.evaluate import _paired_lift_interval
+
+        return _paired_lift_interval(predictions, labels, confidence=0.95)
+
+    def test_the_interval_is_the_paired_difference_interval(self):
+        """The contract, stated as the formula rather than as a magic number."""
+        labels = np.array([1] * 70 + [0] * 30)
+        predictions = np.array([1] * 65 + [0] * 35)
+
+        se, low, high = self._interval(predictions, labels)
+        differences = (predictions == labels).astype(float) - (labels == 1).astype(float)
+        expected_se = float(np.std(differences, ddof=1) / np.sqrt(len(labels)))
+        lift = float(np.mean(differences))
+
+        assert se == pytest.approx(expected_se)
+        assert low == pytest.approx(lift - 1.959963984540054 * expected_se)
+        assert high == pytest.approx(lift + 1.959963984540054 * expected_se)
+        # And the centre is the same lift the report quotes.
+        assert (low + high) / 2 == pytest.approx(lift)
+
+    def test_a_predictor_with_no_association_has_an_interval_spanning_zero(self):
+        """Balanced labels: independence gives a lift of zero, so the interval
+        must contain it."""
+        rng = np.random.default_rng(11)
+        labels = (rng.random(400) < 0.5).astype(int)
+        predictions = (rng.random(400) < 0.5).astype(int)
+        _, low, high = self._interval(predictions, labels)
+        assert low <= 0.0 <= high
+
+    def test_on_imbalanced_labels_an_uninformative_predictor_is_worse(self):
+        """Worth pinning, because it is counter-intuitive.
+
+        When 85% of labels are positive, the always-positive rule is already at
+        85%. A predictor that ignores the labels entirely still gets ~75%, so it
+        is *significantly worse* than the base rate - the interval excludes zero
+        on the negative side. "No association" and "no difference from the base
+        rate" are not the same thing.
+        """
+        rng = np.random.default_rng(3)
+        labels = (rng.random(200) < 0.85).astype(int)
+        predictions = (rng.random(200) < 0.85).astype(int)
+        _se, _low, high = self._interval(predictions, labels)
+        assert high < 0.0
+
+    def test_a_one_point_lift_is_not_a_finding(self):
+        """The case that produced the false README claim, in miniature."""
+        labels = np.array([1] * 90 + [0] * 10)
+        predictions = np.array([1] * 90 + [0] + [1] * 9)
+        _, low, high = self._interval(predictions, labels)
+        assert low < 0.0 < high
+
+    def test_a_perfect_predictor_excludes_zero(self):
+        labels = np.array([1] * 80 + [0] * 20)
+        _se, low, _high = self._interval(labels.copy(), labels)
+        assert low > 0.0
+
+    def test_a_perfectly_inverted_predictor_excludes_zero(self):
+        labels = np.array([1] * 80 + [0] * 20)
+        _se, _low, high = self._interval(1 - labels, labels)
+        assert high < 0.0
+
+    def test_the_paired_form_is_chosen_for_correctness_not_for_width(self):
+        """The paired standard error is not always the smaller one.
+
+        It is the right one because the two accuracies are computed on the same
+        labels, so their difference is paired. This test records a case where it
+        is *larger* than the naive independent-proportions formula, so nobody
+        later "simplifies" it back on the assumption that paired means tighter.
+        """
+        labels = np.array([1] * 70 + [0] * 30)
+        predictions = np.array([1] * 65 + [0] * 35)
+        paired_se, _, _ = self._interval(predictions, labels)
+
+        n = len(labels)
+        accuracy = float(np.mean(predictions == labels))
+        base_rate = float(np.mean(labels == 1))
+        independent_se = float(
+            np.sqrt(accuracy * (1 - accuracy) / n + base_rate * (1 - base_rate) / n)
+        )
+        assert paired_se != pytest.approx(independent_se)
+        assert paired_se > independent_se
+
+    def test_degenerate_samples_do_not_produce_a_spurious_interval(self):
+        assert self._interval(np.array([1]), np.array([1])) == (0.0, 0.0, 0.0)
+
+    def test_the_report_exposes_distinguishability(self):
+        """A positive point estimate whose interval spans zero is not a finding."""
+        labels = np.array([1] * 90 + [0] * 10)
+        predictions = np.array([1] * 90 + [0] + [1] * 9)
+        report = evaluate(_StubModel(predictions), np.zeros((100, 1)), labels, split="test")
+        assert report.lift_over_base_rate == pytest.approx(0.01)
+        assert report.beats_base_rate  # the point estimate, which is not evidence
+        assert not report.lift_is_distinguishable
+        assert report.to_dict()["lift_is_distinguishable"] is False
+
+    def test_an_untabulated_confidence_level_raises(self):
+        from tradeforge.ml.evaluate import _z_for
+
+        with pytest.raises(ValueError, match="not tabulated"):
+            _z_for(0.99)
+
+
+class _StubModel:
+    """Returns pre-set probabilities so a report can be built from known labels."""
+
+    name = "stub"
+    is_label_fitted = True
+
+    def __init__(self, predictions: np.ndarray) -> None:
+        self._predictions = predictions.astype(float)
+
+    def fit(self, features: np.ndarray, labels: np.ndarray) -> None:
+        return None
+
+    def predict_proba(self, features: np.ndarray) -> np.ndarray:
+        # 0.99/0.01 rather than 1.0/0.0 so the threshold at 0.5 is unambiguous.
+        return np.where(self._predictions == 1, 0.99, 0.01)
+
+
 class TestMlConfig:
     def test_reads_the_config_section(self, configs):
         config = MlConfig.from_dict(configs)

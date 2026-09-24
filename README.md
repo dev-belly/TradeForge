@@ -89,10 +89,19 @@ with a 95% interval of [−0.001, +0.037] and a sign-test p-value of 1.000. The
 platform reports this rather than quoting the point estimate, and applies
 Holm-Bonferroni across the family of comparisons.
 
-**3. No machine-learning baseline beats the base rate.** The fill-within-30s
-target has a base rate of 0.88 on this generator. Logistic regression and ridge
-score at or below it. The report says so, next to the base rate, and runs two
-independent leakage checks before anyone is tempted to quote an AUC.
+**3. No machine-learning baseline's edge over the base rate is distinguishable
+from noise.** The fill-within-30s target has a base rate of 0.85 on the test
+split. Ridge regression scores 0.8585 against it — a lift of +0.94 percentage
+points, with a 95% interval of [−0.91, +2.79]. The interval spans zero, so the
+point estimate is not a finding. Two baselines are *significantly worse* than
+the base rate: the mid-price rule and the imbalance threshold both have
+intervals excluding zero on the wrong side.
+
+The report shows the interval next to every lift, not just the point estimate,
+and runs two independent leakage checks before anyone is tempted to quote an
+AUC. An earlier version of this paragraph said "logistic regression and ridge
+score at or below the base rate", which was simply false — ridge scores above
+it. That is what the interval was added to catch.
 
 ```bash
 make research   # pre-registered grids A-E, every cell recorded, losses included
@@ -183,7 +192,8 @@ tests/             unit · integration · property · leakage · architecture ·
 | `make ml` | Fill-probability baselines plus two leakage checks |
 | `make run-all` | Execution grid → Parquet |
 | `make db-query NAME=02_benchmark_disagreement` | Run a packaged SQL query |
-| `make report` | Self-contained HTML reports |
+| `make report` | Self-contained HTML reports for the execution grid |
+| `make report-all` | Also the experiment and ML reports (re-runs real work) |
 | `make benchmark` | Throughput, with the machine and commit recorded |
 | `make api` / `make dashboard` | HTTP API / Streamlit over the artefacts |
 | `make doctor` | Engine backend and which optional extras are installed |

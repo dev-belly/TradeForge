@@ -626,9 +626,21 @@ such a leak — it did not, so the screen was added rather than the test being
 weakened.
 
 **114. What did the ML baselines find?**
-Nothing beats the base rate. The target has a base rate of 0.88 on this
-generator; logistic regression and ridge score at or below it. The report says
-so, next to the base rate, rather than presenting an AUC in isolation.
+No baseline's edge over the base rate is distinguishable from noise. The target
+has a base rate of 0.85 on the test split. Ridge regression scores 0.8585 — a
+lift of +0.94 percentage points with a 95% interval of [−0.91, +2.79], which
+spans zero. Two baselines are significantly *worse*: the mid-price rule and the
+imbalance threshold both have intervals excluding zero on the wrong side.
+
+The lift is reported as a paired interval, not a point estimate. The two
+accuracies come from the same samples, so the difference is paired:
+`d_i = correct_i − (y_i == 1)`, and `sd(d)/sqrt(n)` is the standard error.
+Treating them as independent proportions would overstate it.
+
+An earlier version of this answer said "logistic regression and ridge score at
+or below it", which was false — ridge scores above. The point estimate had been
+quoted without an interval, which is how a fraction of a percentage point came
+to look like a finding.
 
 ---
 

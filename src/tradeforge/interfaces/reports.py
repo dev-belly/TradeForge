@@ -191,6 +191,45 @@ class HtmlReportBuilder:
         path = self._write(f"experiment-{result.name}.html", "\n".join(sections))
         return HtmlReport(path=path, title=result.name, payload=result.to_dict())
 
+    @staticmethod
+    def _model_table(reports: Sequence[Any]) -> str:
+        """Per-model metrics for one split, with the lift as an interval.
+
+        The interval columns are the point of the table. A positive lift whose
+        interval spans zero is not a finding, and arranging the columns so that
+        is visible without arithmetic is cheaper than a caveat nobody reads.
+        """
+        return _table(
+            [
+                "model",
+                "n",
+                "base rate",
+                "accuracy",
+                "auc",
+                "brier",
+                "lift",
+                "lift 95% low",
+                "lift 95% high",
+                "interval excludes zero",
+            ],
+            [
+                [
+                    r.model,
+                    r.n,
+                    r.base_rate,
+                    r.accuracy,
+                    r.auc,
+                    r.brier,
+                    r.lift_over_base_rate,
+                    r.lift_ci_lower,
+                    r.lift_ci_upper,
+                    r.lift_is_distinguishable,
+                ]
+                for r in reports
+            ],
+            numeric=(1, 2, 3, 4, 5, 6, 7, 8),
+        )
+
     def _cell_section(self, result: Any) -> str:
         table = _table(
             [
@@ -288,28 +327,15 @@ class HtmlReportBuilder:
             ("Test (scored once, after model selection)", result.test_reports),
         ):
             sections.append(f"<h2>{html.escape(label)}</h2>")
-            sections.append(
-                _table(
-                    ["model", "n", "base rate", "accuracy", "auc", "brier", "lift over base rate"],
-                    [
-                        [
-                            r.model,
-                            r.n,
-                            r.base_rate,
-                            r.accuracy,
-                            r.auc,
-                            r.brier,
-                            r.lift_over_base_rate,
-                        ]
-                        for r in reports
-                    ],
-                    numeric=(1, 2, 3, 4, 5, 6),
-                )
-            )
+            sections.append(self._model_table(reports))
             sections.append(
                 '<p class="note">Accuracy is shown next to the base rate on purpose: '
                 "on an imbalanced target, a model can look accurate while adding "
-                "nothing.</p>"
+                "nothing. The lift is the paired difference between the two on the "
+                "same samples, and its interval is what decides whether the model "
+                "has an edge at all. A positive point estimate whose interval "
+                "spans zero is not a finding, and this table is arranged so that "
+                "is visible without arithmetic.</p>"
             )
 
         sections.append("<h2>Leakage checks</h2>")

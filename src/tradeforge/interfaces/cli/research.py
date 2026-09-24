@@ -173,10 +173,39 @@ def fill_probability(
 
 
 def _report_table(reports: Any) -> str:
+    """Per-model metrics, with the lift as an interval rather than a point.
+
+    The point estimate alone invites the reader to treat a fraction of a
+    percentage point as a finding. The `excludes_0` column is the answer to the
+    question actually being asked: is this model's edge over the base rate
+    distinguishable from sampling noise?
+    """
     return render_table(
-        ["model", "n", "base_rate", "accuracy", "auc", "brier", "lift"],
         [
-            [r.model, r.n, r.base_rate, r.accuracy, r.auc, r.brier, r.lift_over_base_rate]
+            "model",
+            "n",
+            "base_rate",
+            "accuracy",
+            "auc",
+            "brier",
+            "lift",
+            "lift_lo",
+            "lift_hi",
+            "excludes_0",
+        ],
+        [
+            [
+                r.model,
+                r.n,
+                r.base_rate,
+                r.accuracy,
+                r.auc,
+                r.brier,
+                r.lift_over_base_rate,
+                r.lift_ci_lower,
+                r.lift_ci_upper,
+                r.lift_is_distinguishable,
+            ]
             for r in reports
         ],
     )

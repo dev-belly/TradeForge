@@ -81,11 +81,33 @@ class ClassificationReport:
     recall: float
     f1: float
     lift_over_base_rate: float
+    #: Paired standard error of the lift, and its 95% interval. The lift is a
+    #: *paired* difference: on the same samples, model accuracy minus the
+    #: accuracy of the always-predict-positive rule. Reporting only the point
+    #: estimate invites the reader to treat a fraction of a percentage point as
+    #: a finding, which at this sample size it is not.
+    lift_standard_error: float = 0.0
+    lift_ci_lower: float = 0.0
+    lift_ci_upper: float = 0.0
     calibration: tuple[CalibrationBin, ...] = ()
 
     @property
     def beats_base_rate(self) -> bool:
+        """Whether the point estimate exceeds the base rate. Rarely the question.
+
+        Kept because it is a factual comparison, but it is not evidence of
+        anything on its own - see `lift_is_distinguishable`.
+        """
         return self.accuracy > self.base_rate
+
+    @property
+    def lift_is_distinguishable(self) -> bool:
+        """Whether the 95% interval for the lift excludes zero.
+
+        This is the honest form of "does the model beat the base rate". On the
+        bundled data it is False for every model, which is the finding.
+        """
+        return self.lift_ci_lower > 0.0 or self.lift_ci_upper < 0.0
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -100,7 +122,11 @@ class ClassificationReport:
             "recall": self.recall,
             "f1": self.f1,
             "lift_over_base_rate": self.lift_over_base_rate,
+            "lift_standard_error": self.lift_standard_error,
+            "lift_ci_lower": self.lift_ci_lower,
+            "lift_ci_upper": self.lift_ci_upper,
             "beats_base_rate": self.beats_base_rate,
+            "lift_is_distinguishable": self.lift_is_distinguishable,
             "calibration": [b.to_dict() for b in self.calibration],
         }
 
@@ -205,6 +231,8 @@ def evaluate(
     f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
     brier = float(np.mean((probabilities - y) ** 2)) if len(y) else 0.0
 
+    lift_se, lift_low, lift_high = _paired_lift_interval(predictions, y, confidence=0.95)
+
     return ClassificationReport(
         model=model.name,
         split=split,
@@ -217,8 +245,56 @@ def evaluate(
         recall=recall,
         f1=f1,
         lift_over_base_rate=accuracy - base_rate,
+        lift_standard_error=lift_se,
+        lift_ci_lower=lift_low,
+        lift_ci_upper=lift_high,
         calibration=_calibration(probabilities, y, calibration_bins),
     )
+
+
+def _paired_lift_interval(
+    predictions: np.ndarray, labels: np.ndarray, *, confidence: float
+) -> tuple[float, float, float]:
+    """Standard error and interval for `accuracy - base_rate`, paired by sample.
+
+    The two accuracies come from the *same* observations, so the difference is a
+    paired quantity: per sample, `d_i = correct_i - (y_i == 1)`, because the
+    base-rate rule predicts positive for every sample. The mean of `d` is the
+    lift and `sd(d)/sqrt(n)` is its standard error.
+
+    Treating the two accuracies as independent proportions would overstate the
+    standard error, because both are computed on the same labels. There is a
+    test for exactly that.
+
+    Returns `(standard_error, lower, upper)`, or zeros when the sample is too
+    small for a standard error to mean anything.
+    """
+    n = len(labels)
+    if n < 2:
+        return 0.0, 0.0, 0.0
+    correct = (predictions == labels).astype(float)
+    base_correct = (labels == 1).astype(float)
+    differences = correct - base_correct
+    se = float(np.std(differences, ddof=1) / np.sqrt(n))
+    lift = float(np.mean(differences))
+    z = 1.959963984540054 if confidence == 0.95 else float(_z_for(confidence))
+    return se, lift - z * se, lift + z * se
+
+
+def _z_for(confidence: float) -> float:
+    """Two-sided normal critical value, from a small table.
+
+    Deliberately not a general inverse-normal implementation: only the levels
+    this module uses are supported, and an unsupported level should be an
+    obvious error rather than a quietly wrong number.
+    """
+    table = {0.80: 1.2815515655446004, 0.90: 1.6448536269514722, 0.95: 1.959963984540054}
+    try:
+        return table[confidence]
+    except KeyError as exc:
+        raise ValueError(
+            f"confidence {confidence} is not tabulated; supported: {sorted(table)}"
+        ) from exc
 
 
 def _calibration(

@@ -26,7 +26,7 @@ ARTIFACTS ?= artifacts
 
 .PHONY: help check-deps install install-full doctor build-cpp test test-python test-all test-cpp \
         test-differential sanitize lint format typecheck demo run-all research ml \
-        benchmark report api dashboard db-init db-list db-query clean distclean
+        benchmark report report-all api dashboard db-init db-list db-query clean distclean
 
 # Fail with a sentence instead of a traceback when the interpreter is missing
 # the package's dependencies. Every CLI-dependent target depends on this.
@@ -119,8 +119,13 @@ ml: check-deps ## Fit the fill-probability baselines on a purged time split
 benchmark: check-deps ## Measure throughput and write artifacts/benchmarks/*.json
 	$(PY) -m benchmarks.run_benchmarks --output $(ARTIFACTS)/benchmarks
 
-report: check-deps ## Render the self-contained HTML reports
+report: check-deps ## Render the HTML reports for the execution grid (fast)
 	$(CLI) report --output $(ARTIFACTS)/reports \
+		--configs $(CONFIGS)
+
+report-all: check-deps ## Also render the experiment and ML reports (re-runs real work)
+	$(CLI) report --output $(ARTIFACTS)/reports \
+		--experiments --ml --seeds 3 \
 		--configs $(CONFIGS)
 
 # ---------------------------------------------------------------- interfaces
