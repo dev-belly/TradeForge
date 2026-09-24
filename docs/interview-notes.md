@@ -446,9 +446,10 @@ the sweep.
 
 **81. What is the most important idea in the TCA layer?**
 That the benchmark choice can flip the sign of the conclusion. On the bundled
-data: −7.94 bps against the arrival mid, +2.89 bps against the interval VWAP.
-Same execution. The market fell 23.5 bps during the window and the arrival
-benchmark credits the strategy with all of it.
+synthetic data, aggressive TWAP costs −6.93 bps against arrival and +0.11 bps
+against interval VWAP. Passive TWAP costs −7.94 and −0.90 bps respectively.
+The market fell 23.5 bps from arrival to terminal mid, while interval VWAP
+was about 7.04 bps below arrival. Report both benchmarks.
 
 **82. Why not just use arrival price?**
 Because it is the most flattering benchmark for any strategy that benefits from

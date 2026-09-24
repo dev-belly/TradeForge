@@ -5,7 +5,7 @@
 -- the arrival benchmark silently credits the strategy with the whole market
 -- drift that happened while it was working the order.
 --
--- `arrival_minus_vwap_bps` is the size of that illusion. When it is large, any
+-- `arrival_minus_vwap_bps` is the signed cost gap. When its magnitude is large, any
 -- claim of the form "we beat the arrival price by X bps" is mostly a claim
 -- about which way the market moved, not about execution quality.
 --

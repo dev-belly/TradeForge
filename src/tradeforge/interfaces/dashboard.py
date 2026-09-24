@@ -144,7 +144,7 @@ def _tab_benchmarks(store: DuckDbStore) -> None:
         "A strategy that looks strong against the **arrival price** can look "
         "weak against the **interval VWAP**, because the arrival benchmark "
         "credits the strategy with market drift that happened while the order "
-        "was working. `arrival_minus_vwap_bps` is the size of that illusion."
+        "was working. `arrival_minus_vwap_bps` is the signed cost gap."
     )
     frame = store.run_named("02_benchmark_disagreement")
     st.dataframe(frame, width="stretch", hide_index=True)

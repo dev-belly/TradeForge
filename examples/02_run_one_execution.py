@@ -41,7 +41,7 @@ def main() -> int:
         "counterfactual_mode",
         "config_fingerprint",
     ):
-        print(f"  {key:<22} {context.provenance.get(key)}")
+        print(f"  {key:<22} {report.provenance.get(key)}")
     print()
 
     print("=" * 72)
@@ -121,7 +121,7 @@ def main() -> int:
         med = f"{summary.median_bps:+.4f}" if summary.median_bps is not None else "-"
         print(
             f"  {summary.horizon_ns / 1e9:>8.0f}s{summary.n_measurable:>12}"
-            f"{summary.coverage:>9.0%}{vw:>12}{med:>10}"
+            f"{summary.coverage:>9.1%}{vw:>12}{med:>10}"
         )
     print()
     print("  A short-horizon negative turning positive at longer horizons is the")

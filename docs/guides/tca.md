@@ -6,24 +6,26 @@ A cost number is meaningless without its benchmark, and the choice of benchmark
 is the largest single decision in the analysis. The bundled data makes this
 concrete:
 
-| Benchmark | Price (ticks) | Cost (bps) | What it credits the strategy with |
+| Benchmark | Price (ticks) | Cost (bps) | Interpretation |
 |---|---|---|---|
 | arrival mid | 10 000.0 | −7.94 | market drift during the window |
-| interval VWAP | 9 989.18 | +2.89 | volume-timing skill only |
-| interval TWAP | 9 989.03 | +3.04 | time-timing skill only |
-| interval mid | 9 989.12 | +2.95 | neither — a cruder average |
+| interval VWAP | 9 992.96 | −0.90 | compared with traded volume's average price |
+| interval TWAP | 9 992.93 | −0.87 | compared with the time-weighted mid |
+| interval mid | 9 992.99 | −0.92 | compared with the unweighted mid |
 | terminal mid | 9 976.5 | +15.60 | — |
 
-Same execution, five conclusions spanning 23 bps. The market fell 23.5 bps over
-the window, and the arrival benchmark hands the strategy all of it.
+Same execution, five costs spanning 23.54 bps. The market fell 23.5 bps from
+arrival to terminal mid; the interval VWAP was about 7.04 bps below arrival.
+An aggressive TWAP run changes sign between arrival (−6.93 bps) and
+interval VWAP (+0.11 bps).
 
 ```bash
 make db-query NAME=02_benchmark_disagreement
 ```
 
-`arrival_minus_vwap_bps` is the size of the illusion. When it is large, any claim
-of the form "we beat the arrival price by X bps" is mostly a claim about which
-way the market moved.
+`arrival_minus_vwap_bps` is the signed gap between costs. When its magnitude is
+large, a claim such as "we beat the arrival price by X bps" needs to be read
+alongside the market's movement during the window.
 
 ## Sign convention
 
@@ -42,6 +44,7 @@ IS_total = IS_filled * fill_ratio  +  opportunity_cost * (1 - fill_ratio)
 The filled leg is measured against the arrival price; the unfilled leg is charged
 at the end-of-window price. Both legs are weighted by their share of the
 **requested** quantity, so a strategy that fills 10% cheaply does not look good.
+If a required leg is unmeasurable, total shortfall is `None`, not zero.
 
 `opportunity_cost_bps` is the unfilled leg on its own. On a full fill it
 contributes nothing; on a partial fill it is often the dominant term, which is

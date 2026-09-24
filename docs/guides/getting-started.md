@@ -49,15 +49,15 @@ the `participation` column dropped for width:
 ```
 policy       style       fill     maker   vs_arrival_bps  vs_vwap_bps  is_bps
 -----------  ----------  -------  ------  --------------  -----------  -------
-twap         passive     100.00%  96.3%   -7.9369         2.8907       -7.9369
-twap         aggressive  100.00%  5.1%    -6.9336         3.8951       -6.9336
+twap         passive     100.00%  96.3%   -7.9369         -0.8977      -7.9369
+twap         aggressive  100.00%  5.1%    -6.9336         0.1063       -6.9336
 ```
 
-**Stop and look at the two cost columns.** Every strategy is roughly 7 bps
-*cheaper* than the arrival price and 3 bps *more expensive* than the interval
-VWAP. Both are correct. The market drifted down 23 bps over the half-hour window,
-and the arrival benchmark hands the strategy credit for all of it. The VWAP
-benchmark does not.
+**Stop and look at the two cost columns.** Passive TWAP beats both benchmarks;
+aggressive TWAP beats arrival but trails interval VWAP. The arrival-to-VWAP
+price gap is about 7.04 bps on this synthetic session. Arrival credits the
+execution with market drift during the window, so neither cost alone measures
+the scheduling policy's skill.
 
 If you take one thing from this repository, take that.
 
@@ -73,11 +73,11 @@ metric                          value
 policy                          twap
 side                            BUY
 fill_ratio                      1
-participation_rate              0.0188805
+participation_rate              0.0189
 cost_vs_arrival_bps             -7.9369
-cost_vs_vwap_bps                2.89066
+cost_vs_vwap_bps                -0.8977
 implementation_shortfall_bps    -7.9369
-maker_fill_ratio                0.96335
+maker_fill_ratio                0.9634
 queue_mode                      APPROXIMATE
 latency_basis                   scenario
 counterfactual_mode             replay_approximation
@@ -86,8 +86,8 @@ Benchmarks (ticks)
 benchmark        value    basis
 ---------------  -------  ----------------------------------
 arrival_mid      10000    first mid at/after window start
-interval_vwap    9989.18  volume weighted over 9821 prints
-interval_twap    9989.03  time weighted mid, trapezoidal
+interval_vwap    9992.96  volume weighted over 8417 prints
+interval_twap    9992.93  time weighted mid, trapezoidal
 terminal_mid     9976.5   last mid inside the window
 
 Cost attribution (bps, positive = worse)

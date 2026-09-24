@@ -35,21 +35,22 @@ SYNTHETIC DATA - deterministic generator, not a real venue.
 
 policy       style       fill     maker   vs_arrival_bps  vs_vwap_bps  is_bps   participation
 -----------  ----------  -------  ------  --------------  -----------  -------  -------------
-twap         passive     100.00%  96.3%   -7.9369         2.8907       -7.9369  1.888%
-twap         aggressive  100.00%  5.1%    -6.9336         3.8951       -6.9336  1.888%
-vwap         passive     100.00%  96.3%   -7.9001         2.9276       -7.9001  1.888%
-pov          passive     100.00%  100.0%  -5.0705         5.7602       -5.0705  1.888%
-pov          aggressive  100.00%  3.4%    -3.3543         7.4782       -3.3543  1.888%
-is_baseline  passive     100.00%  97.4%   -7.1082         3.7202       -7.1082  1.888%
+twap         passive     100.00%  96.3%   -7.9369         -0.8977      -7.9369  1.888%
+twap         aggressive  100.00%  5.1%    -6.9336         0.1063       -6.9336  1.888%
+vwap         passive     100.00%  96.3%   -7.9001         -0.8608      -7.9001  1.888%
+vwap         aggressive  100.00%  5.3%    -6.8957         0.1442       -6.8957  1.888%
+pov          passive     100.00%  100.0%  -5.0705         1.9707       -5.0705  1.888%
+pov          aggressive  100.00%  3.4%    -3.3543         3.6881       -3.3543  1.888%
+is_baseline  passive     100.00%  97.4%   -7.1082         -0.0685      -7.1082  1.888%
+is_baseline  aggressive  100.00%  4.8%    -6.1079         0.9325       -6.1079  1.888%
 ```
 
-**Read the first two cost columns together.** Every strategy looks excellent
-against the arrival price and mediocre against the interval VWAP. That is not a
-bug in the strategies; it is the arrival benchmark crediting them with 5.2 bps of
-market drift that happened while the order was working. This distinction is the
-single most important idea in the repository, and it is why the platform ships
-with `sql/02_benchmark_disagreement.sql` and refuses to present one cost column
-without the other.
+**Read the first two cost columns together.** Passive TWAP beats both benchmarks;
+aggressive TWAP beats the arrival price but trails the interval VWAP. The same
+execution has a 7.04 bps gap between those two cost measures, reflecting the
+market move between arrival and the volume-weighted price during the order window.
+The platform ships with `sql/02_benchmark_disagreement.sql` and presents both
+cost columns together.
 
 ---
 
@@ -78,10 +79,10 @@ The platform is more useful when it reports what did *not* work. Three results
 from the bundled synthetic data, all reproducible with `make research` and
 `make ml`:
 
-**1. The benchmark choice changes the sign of the conclusion.** Arrival-price
-cost is −7.94 bps; interval-VWAP cost is +2.89 bps. Same execution. Any claim of
-the form "we beat the arrival price by X bps" is mostly a claim about which way
-the market moved.
+**1. The benchmark choice changes the sign for aggressive TWAP.** Its arrival-price
+cost is −6.93 bps; interval-VWAP cost is +0.11 bps. Passive TWAP scores −7.94
+and −0.90 bps respectively. The benchmark gap reflects market drift; neither
+number alone measures execution skill.
 
 **2. With three sessions, no algorithm is distinguishable from any other.** The
 paired comparison of VWAP against TWAP gives a mean difference of +0.013 bps
