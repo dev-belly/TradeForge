@@ -186,7 +186,7 @@ tests/             unit · integration · property · leakage · architecture ·
 | Command | What it does |
 |---|---|
 | `make demo` | Four algorithms, two styles, one table |
-| `make test` | The Python suite (249 test functions; the architecture suite alone expands to 506 parametrised cases) |
+| `make test` | The Python suite (305 test functions; the architecture suite alone expands to 506 parametrised cases) |
 | `make test-differential` | Builds the C++ core and proves it matches Python |
 | `make research` | Grids A–E with bootstrap intervals and paired comparisons |
 | `make ml` | Fill-probability baselines plus two leakage checks |
@@ -194,6 +194,7 @@ tests/             unit · integration · property · leakage · architecture ·
 | `make db-query NAME=02_benchmark_disagreement` | Run a packaged SQL query |
 | `make report` | Self-contained HTML reports for the execution grid |
 | `make report-all` | Also the experiment and ML reports (re-runs real work) |
+| `make screenshots` | Render the dashboard to PNGs; fails if any tab raised |
 | `make benchmark` | Throughput, with the machine and commit recorded |
 | `make api` / `make dashboard` | HTTP API / Streamlit over the artefacts |
 | `make doctor` | Engine backend and which optional extras are installed |
@@ -279,7 +280,7 @@ If that interpreter cannot import the dependencies, `make` says so in one
 sentence rather than printing a traceback.
 
 ```
-pytest         249 test functions in six suites: unit, integration, property,
+pytest         305 test functions in six suites: unit, integration, property,
                leakage, architecture, differential
 ruff + mypy    lint and type check, both clean. `make typecheck` and
                `make lint` are the commands CI runs; both pass locally too.

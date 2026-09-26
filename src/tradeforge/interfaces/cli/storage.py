@@ -47,15 +47,40 @@ def db_query(
     root: Annotated[Path, typer.Option("--root")] = DEFAULT_ROOT,
     sql_dir: Annotated[Path, typer.Option("--sql-dir")] = DEFAULT_SQL_DIR,
 ) -> None:
-    """Run one packaged query and print the result."""
+    """Run one packaged query and print the result.
+
+    Checks the query's own table dependencies first. Letting DuckDB raise a
+    `CatalogException` for a missing table reads as a broken query; in fact the
+    table is expected to be absent until something writes it, and the useful
+    thing to say is which command writes it.
+    """
     store = DuckDbStore(root, sql_dir=sql_dir)
     status = store.status()
     if not status.present_tables:
         fail(f"no Parquet artefacts under {root}. Run `make run-all` first.")
         return
+
+    missing = store.missing_tables_for(name)
+    if missing:
+        writers = {
+            "events": "`make run-all` (drop --skip-events)",
+            "experiment_runs": "`make run-all`, or `make research`",
+            "datasets": "`make run-all`",
+            "executions": "`make run-all`",
+            "child_orders": "`make run-all`",
+            "fills": "`make run-all`",
+            "tca_metrics": "`make run-all`",
+            "markouts": "`make run-all`",
+        }
+        fail(
+            f"query {name!r} reads {', '.join(missing)}, which this store does not "
+            "hold.\nRun: " + "; ".join(writers.get(t, "see docs") for t in missing)
+        )
+        return
+
     frame = store.run_named(name)
     typer.echo(f"root: {root}")
-    typer.echo(f"tables present: {', '.join(status.present_tables)}")
+    typer.echo(f"reads: {', '.join(store.required_tables(name))}")
     if status.missing_tables:
         typer.echo(f"tables absent : {', '.join(status.missing_tables)}")
     typer.echo("")

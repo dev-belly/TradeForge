@@ -9,6 +9,7 @@ results".
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -143,6 +144,30 @@ class DuckDbStore:
         if key not in queries:
             raise ConfigurationError(f"unknown query {name!r}; available: {sorted(queries)}")
         return queries[key].read_text(encoding="utf-8")
+
+    def required_tables(self, name: str) -> tuple[str, ...]:
+        """Which of the known tables a packaged query reads.
+
+        DuckDB reports a missing table as a `CatalogException` naming the table,
+        which is fine for a person reading a stack trace and useless as a
+        diagnostic: it does not say that the table is *expected* to be absent
+        until something writes it, nor which command writes it.
+
+        Scanned rather than declared in each `.sql` file so that a typo in a
+        table name shows up as "this query needs a table that does not exist"
+        instead of as a query that quietly reads nothing.
+        """
+        sql = self.load_query(name).lower()
+        found: list[str] = []
+        for table in TABLE_ORDER:
+            if re.search(rf"\b{re.escape(table)}\b", sql):
+                found.append(table)
+        return tuple(found)
+
+    def missing_tables_for(self, name: str) -> tuple[str, ...]:
+        """The tables a query needs that the store does not currently hold."""
+        present = set(self.status().present_tables)
+        return tuple(table for table in self.required_tables(name) if table not in present)
 
     def run_named(self, name: str) -> Any:
         return self.query_df(self.load_query(name))

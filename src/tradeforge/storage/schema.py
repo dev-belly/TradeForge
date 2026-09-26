@@ -7,8 +7,24 @@ order execution**. Everything else either describes the conditions it ran under
 
 Column names match the dataclass field names they come from, so a rename in the
 domain surfaces as an obvious schema mismatch rather than a silently wrong
-query. Every table carries `config_fingerprint` so a row can always be traced
-back to the configuration that produced it.
+query.
+
+**Traceability.** Every table is reachable from a table that carries
+`config_fingerprint`, but only three tables carry it themselves:
+
+  * `datasets`, `executions` and `experiment_runs` are roots and hold the
+    fingerprint directly;
+  * `events` joins to `datasets` on `(dataset_name, seed)`;
+  * `child_orders`, `fills`, `tca_metrics` and `markouts` join to `executions`
+    on `(run_id, seed)`.
+
+Denormalising the fingerprint onto every child row would repeat one 16-character
+string across tens of thousands of fills for no extra traceability. The rule
+that matters is that the join key exists, and `tests/unit/test_storage.py`
+asserts it rather than asserting a column that was never meant to be there.
+
+An earlier version of this docstring claimed "every table carries
+`config_fingerprint`", which was false for five of the eight.
 """
 
 from __future__ import annotations

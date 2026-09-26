@@ -23,6 +23,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from tradeforge.application.harness import ExecutionHarness, RunRequest
+from tradeforge.data.registry import create_adapter
 from tradeforge.infrastructure.config import load_configs, validate_required
 from tradeforge.research.registry import EnvironmentRecord
 from tradeforge.storage import ParquetWriter
@@ -46,6 +47,12 @@ def main() -> int:
     )
     parser.add_argument("--queue-policies", default="", help="Comma-separated queue overrides.")
     parser.add_argument("--latencies", default="", help="Comma-separated latency overrides, ns.")
+    parser.add_argument(
+        "--skip-events",
+        action="store_true",
+        help="Do not persist the event stream. Query 07 will then report the "
+        "events table as missing rather than reporting zero events.",
+    )
     args = parser.parse_args()
 
     configs = load_configs(args.configs)
@@ -79,7 +86,22 @@ def main() -> int:
     )
     print()
 
+    # Query 07 reads `events`, and every other query is only interpretable in
+    # the light of it, so the store is incomplete without the stream that was
+    # replayed. One session is enough to answer "what data tier produced this,
+    # how many events, how many trades" - writing every seed would multiply the
+    # store by the seed count for no extra information.
+    dataset_name = str(dataset["name"])
+    if not args.skip_events:
+        stream = create_adapter(
+            configs["market_data"]["source"]["adapter"],
+            dict(configs["market_data"]["source"].get("options", {})),
+        )
+        written = writer.write_events(stream.events(), dataset_name=dataset_name, seed=seeds[0])
+        print(f"events: {written.n_rows:,} rows for seed {seeds[0]} -> {written.path.name}")
+
     n_runs = 0
+    experiment_rows: list[dict[str, object]] = []
     for seed in seeds:
         for policy in policies:
             for style in styles:
@@ -124,16 +146,65 @@ def main() -> int:
 
                         metrics = context.tca.metrics
                         n_runs += 1
+
+                        # `experiment_runs` is what makes the reproducibility
+                        # question answerable: query 07 counts runs whose
+                        # recorded commit came from a dirty tree, which means the
+                        # commit does not fully describe the code that ran.
+                        experiment_rows.append(
+                            _experiment_row(
+                                run_id=run_id,
+                                seed=seed,
+                                policy=policy,
+                                style=style,
+                                metric="implementation_shortfall_bps",
+                                value=metrics.implementation_shortfall_bps,
+                                harness_fingerprint=harness.fingerprint,
+                                environment=environment,
+                            )
+                        )
                         print(
                             f"  {run_id:<44} fill {metrics.fill_ratio:>6.2%} "
                             f"maker {metrics.maker_fill_ratio:>6.1%} "
                             f"IS {metrics.implementation_shortfall_bps:>+8.3f} bps"
                         )
 
+    if experiment_rows:
+        written = writer.write_experiment_rows(experiment_rows)
+        print(f"experiment_runs: {written.n_rows} rows -> {written.path.name}")
+
     print()
     print(f"{n_runs} run(s) written to {args.output}")
     print("Query them with: make db-list && make db-query NAME=01_execution_summary")
     return 0
+
+
+def _experiment_row(
+    *,
+    run_id: str,
+    seed: int,
+    policy: str,
+    style: str,
+    metric: str,
+    value: float,
+    harness_fingerprint: str,
+    environment: EnvironmentRecord,
+) -> dict[str, object]:
+    import json
+    from datetime import UTC, datetime
+
+    return {
+        "experiment": "run_all",
+        "cell": f"{policy}-{style}",
+        "seed": seed,
+        "metric": metric,
+        "metric_value": float(value),
+        "config_fingerprint": harness_fingerprint,
+        "git_commit": environment.git_commit,
+        "git_dirty": bool(environment.git_dirty),
+        "recorded_at_utc": datetime.now(UTC).isoformat(),
+        "tags_json": json.dumps({"run_id": run_id}, sort_keys=True),
+    }
 
 
 if __name__ == "__main__":

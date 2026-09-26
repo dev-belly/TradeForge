@@ -18,13 +18,26 @@ Start it with `make dashboard`.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 
-from ..storage import DuckDbStore, StoreStatus
+# `streamlit run <file>` executes this file as a *script*, not as a module in the
+# `tradeforge.interfaces` package, so `__package__` is empty and every relative
+# import fails with "attempted relative import with no known parent package".
+# The dashboard then renders that ImportError into the page while the HTTP status
+# stays 200 - which is why a `curl` check would never have caught it.
+#
+# Bootstrapping `src/` onto the path and importing absolutely makes the file work
+# both as a script and as a module.
+_SRC = Path(__file__).resolve().parents[2]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from tradeforge.storage import DuckDbStore, StoreStatus  # noqa: E402
 
 ARTIFACT_ROOT = Path("artifacts/runs")
 SQL_DIR = Path("sql")
@@ -115,7 +128,7 @@ def _render_sidebar(status: StoreStatus) -> None:
 
 def _tab_cost(store: DuckDbStore) -> None:
     st.subheader("Cost and completion by algorithm")
-    st.dataframe(store.run_named("01_execution_summary"), use_container_width=True, hide_index=True)
+    st.dataframe(store.run_named("01_execution_summary"), width="stretch", hide_index=True)
     st.caption(PROVENANCE_CAPTION)
 
 
@@ -128,7 +141,7 @@ def _tab_benchmarks(store: DuckDbStore) -> None:
         "was working. `arrival_minus_vwap_bps` is the size of that illusion."
     )
     frame = store.run_named("02_benchmark_disagreement")
-    st.dataframe(frame, use_container_width=True, hide_index=True)
+    st.dataframe(frame, width="stretch", hide_index=True)
     if not frame.empty and "arrival_minus_vwap_bps" in frame.columns:
         st.bar_chart(frame.set_index("policy")["arrival_minus_vwap_bps"], height=320)
     st.caption(PROVENANCE_CAPTION)
@@ -143,7 +156,7 @@ def _tab_attribution(store: DuckDbStore) -> None:
         "altered the tape."
     )
     frame = store.run_named("03_cost_attribution")
-    st.dataframe(frame, use_container_width=True, hide_index=True)
+    st.dataframe(frame, width="stretch", hide_index=True)
     if not frame.empty and "residual_share_of_is" in frame.columns:
         high = frame[frame["residual_share_of_is"].abs() > 0.5]
         if not high.empty:
@@ -164,7 +177,7 @@ def _tab_markouts(store: DuckDbStore) -> None:
     )
     st.dataframe(
         store.run_named("04_markout_adverse_selection"),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     st.caption(PROVENANCE_CAPTION)
@@ -181,7 +194,7 @@ def _tab_queue(store: DuckDbStore) -> None:
     )
     st.dataframe(
         store.run_named("05_queue_policy_sensitivity"),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     st.caption(PROVENANCE_CAPTION)
@@ -217,7 +230,7 @@ def _render_summary(path: Path) -> None:
         )
         cells = payload.get("summary", {}).get("cells", [])
         if cells:
-            st.dataframe(pd.DataFrame(cells), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(cells), width="stretch", hide_index=True)
         for caveat in payload.get("caveats", []):
             st.caption(f"- {caveat}")
 

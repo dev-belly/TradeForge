@@ -23,10 +23,12 @@ BUILD     ?= build
 BUILD_SAN ?= build-san
 CONFIGS   ?= configs
 ARTIFACTS ?= artifacts
+SCREENSHOT_PORT ?= 8511
 
 .PHONY: help check-deps install install-full doctor build-cpp test test-python test-all test-cpp \
         test-differential sanitize lint format typecheck demo run-all research ml \
-        benchmark report report-all api dashboard db-init db-list db-query clean distclean
+        benchmark report report-all api dashboard screenshots db-init db-list \
+        db-query clean distclean
 
 # Fail with a sentence instead of a traceback when the interpreter is missing
 # the package's dependencies. Every CLI-dependent target depends on this.
@@ -91,12 +93,12 @@ test-all: test test-differential ## Python suite plus the Python/C++ parity suit
 # ------------------------------------------------------------------- quality
 
 lint: ## Lint and check formatting
-	$(PY) -m ruff check src tests
-	$(PY) -m ruff format --check src tests
+	$(PY) -m ruff check src tests examples benchmarks tools
+	$(PY) -m ruff format --check src tests examples benchmarks tools
 
 format: ## Apply formatting
-	$(PY) -m ruff format src tests
-	$(PY) -m ruff check --fix src tests
+	$(PY) -m ruff format src tests examples benchmarks tools
+	$(PY) -m ruff check --fix src tests examples benchmarks tools
 
 typecheck: ## Static type check
 	$(PY) -m mypy src/tradeforge
@@ -135,6 +137,11 @@ api: ## Start the HTTP API on 127.0.0.1:8000
 
 dashboard: ## Start the Streamlit dashboard (reads artefacts)
 	PYTHONPATH=src $(PY) -m streamlit run src/tradeforge/interfaces/dashboard.py
+
+screenshots: check-deps ## Render the dashboard to PNGs and fail if it raised
+	@$(PY) tools/capture_screenshots.py --port $(SCREENSHOT_PORT) \
+		--output $(ARTIFACTS)/screenshots \
+		$(SCREENSHOT_ARGS)
 
 # -------------------------------------------------------------------- storage
 
