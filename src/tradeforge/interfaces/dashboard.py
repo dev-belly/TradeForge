@@ -37,6 +37,7 @@ _SRC = Path(__file__).resolve().parents[2]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from tradeforge.infrastructure.cpp_bridge import core_status  # noqa: E402
 from tradeforge.storage import DuckDbStore, StoreStatus  # noqa: E402
 
 ARTIFACT_ROOT = Path("artifacts/runs")
@@ -77,6 +78,11 @@ def render() -> None:
         "Market microstructure, limit order book and execution research. "
         "Read-only view over generated artefacts."
     )
+    # Which engine produced a number is part of the number: a result from the
+    # Python reference and one from the compiled core are different claims about
+    # throughput, and the dashboard should not make the reader go and ask.
+    core = core_status()
+    st.caption(f"Engine: `{core['backend']}` — {core['detail']}")
 
     store = _store()
     status = store.status()

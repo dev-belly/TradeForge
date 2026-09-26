@@ -61,9 +61,39 @@ class TestReadOnlyEndpoints:
             assert query["question"], f"{query['name']} has no stated question"
 
     def test_an_unknown_query_is_404_and_names_the_alternatives(self, client):
+        """404 regardless of what the store holds.
+
+        An earlier version checked for artefacts before validating the name, so
+        this answered 200 with a "no artefacts" note on an empty store and 404 on
+        a populated one - describing a nonexistent query as a query that found
+        nothing, and changing the answer based on unrelated state.
+        """
         response = client.get("/queries/99_nope")
         assert response.status_code == 404
-        assert "99_nope" in response.json()["detail"]
+        detail = response.json()["detail"]
+        assert "99_nope" in detail
+        assert "01_execution_summary" in detail
+
+    def test_a_known_query_without_its_tables_says_which_are_missing(self, client):
+        """A missing table is a state, not an error.
+
+        DuckDB's CatalogException names the table but not that it is *expected*
+        to be absent until something writes it, nor what writes it.
+        """
+        response = client.get("/queries/07_data_quality_summary")
+        assert response.status_code == 200
+        body = response.json()
+        if body.get("rows"):
+            pytest.skip("artefacts/runs is populated, so the query ran")
+        assert "does not hold" in body["note"]
+        assert "events" in body["note"]
+        assert "make run-all" in body["note"]
+
+    def test_the_store_status_is_reported_with_every_answer(self, client):
+        """So a caller can tell "no rows" from "no data" without a second call."""
+        body = client.get("/queries/01_execution_summary").json()
+        assert "store" in body
+        assert "present_tables" in body["store"]
 
     def test_an_unknown_report_is_404(self, client):
         response = client.get("/reports/does-not-exist")

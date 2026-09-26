@@ -151,9 +151,41 @@ def list_queries() -> dict[str, Any]:
 
 @app.get("/queries/{name}")
 def run_query(name: str) -> dict[str, Any]:
-    """Run one packaged query over the Parquet artefacts."""
+    """Run one packaged query over the Parquet artefacts.
+
+    The checks run in order of what the caller can do about them, and the order
+    matters. An earlier version tested for artefacts *before* validating the
+    name, so `GET /queries/99_nope` answered 200 with an empty result and a
+    "no artefacts" note on an empty store and 404 on a populated one. The same
+    request described a nonexistent query as a query that found nothing, and the
+    answer depended on unrelated state.
+    """
     store = DuckDbStore(DEFAULT_ARTIFACT_ROOT, sql_dir=DEFAULT_SQL_DIR)
+
+    # 1. Does the query exist? A property of the repository, not of the store.
+    if name.removesuffix(".sql") not in store.available_queries():
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown query {name!r}; available: {sorted(store.available_queries())}",
+        )
+
     status = store.status()
+
+    # 2. Are the tables it reads present? "events is missing" is actionable;
+    #    DuckDB's CatalogException reads like a broken query.
+    missing = store.missing_tables_for(name)
+    if missing:
+        return {
+            "query": name,
+            "rows": [],
+            "note": (
+                f"this query reads {', '.join(missing)}, which the store does not "
+                f"hold. Run `make run-all` under {DEFAULT_ARTIFACT_ROOT}."
+            ),
+            "store": status.to_dict(),
+        }
+
+    # 3. Is there anything at all?
     if not status.present_tables:
         return {
             "query": name,
@@ -164,6 +196,7 @@ def run_query(name: str) -> dict[str, Any]:
             ),
             "store": status.to_dict(),
         }
+
     try:
         frame = store.run_named(name)
     except TradeForgeError as exc:
