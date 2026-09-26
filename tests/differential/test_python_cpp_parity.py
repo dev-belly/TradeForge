@@ -12,15 +12,15 @@ The comparison is made event by event over a real generated stream, on:
   * matching results across sides, sizes and time-in-force;
   * the exception raised for invalid events.
 
-The tests are skipped, not failed, when the extension has not been built. A
-skipped differential test is a visible gap; a failing one on a machine without a
-C++ toolchain would just train people to ignore it. `make test-cpp` builds the
-core first.
+The tests are skipped on a Python-only machine. When build/python is explicitly
+on PYTHONPATH (as in the C++ CI job), a missing extension fails collection.
+`make test-differential` also requires the freshly built module.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -34,7 +34,8 @@ def _load_extension():
     """Import `tradeforge_core` from the build directory if it exists."""
     if EXTENSION_DIR.is_dir() and str(EXTENSION_DIR) not in sys.path:
         sys.path.insert(0, str(EXTENSION_DIR))
-    if importlib.util.find_spec("tradeforge_core") is None:
+    spec = importlib.util.find_spec("tradeforge_core")
+    if spec is None or spec.origin is None or Path(spec.origin).resolve().parent != EXTENSION_DIR:
         return None
     import tradeforge_core
 
@@ -42,6 +43,15 @@ def _load_extension():
 
 
 core = _load_extension()
+
+# The C++ CI job puts build/python on PYTHONPATH. In that job a missing module
+# must fail collection, rather than silently skipping the entire parity suite.
+if core is None and any(
+    Path(entry).resolve() == EXTENSION_DIR
+    for entry in os.environ.get("PYTHONPATH", "").split(os.pathsep)
+    if entry
+):
+    raise RuntimeError("C++ parity requested, but build/python has no compiled tradeforge_core")
 
 pytestmark = pytest.mark.skipif(
     core is None,

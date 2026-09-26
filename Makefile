@@ -62,6 +62,7 @@ build-cpp: ## Build the C++ core and the pybind11 extension
 	$(CMAKE) -S . -B $(BUILD) -DCMAKE_BUILD_TYPE=Release -DTRADEFORGE_BUILD_PYTHON=ON
 	$(CMAKE) --build $(BUILD) --parallel
 	@echo "extension: $(BUILD)/python"
+	@PYTHONPATH=$(BUILD)/python:src $(PY) tools/check_cpp_extension.py $(BUILD)
 	@PYTHONPATH=$(BUILD)/python:src $(PY) -c \
 		"from tradeforge.infrastructure.cpp_bridge import core_status; \
 		 s = core_status(); print('backend:', s['backend']); print(s['detail'])"

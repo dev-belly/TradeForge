@@ -52,6 +52,19 @@ market move between arrival and the volume-weighted price during the order windo
 The platform ships with `sql/02_benchmark_disagreement.sql` and presents both
 cost columns together.
 
+## Tech stack
+
+| Layer | Tools used here |
+|---|---|
+| Matching and replay | C++20 and CMake; pybind11 exposes the compiled book to Python |
+| Research and storage | Python 3.11+, NumPy, pandas, scikit-learn, Parquet, DuckDB |
+| Interfaces | Typer CLI, FastAPI service, Streamlit dashboard, HTML reports |
+| Verification | pytest and Hypothesis, Python/C++ parity checks, ruff, mypy, C++ sanitizers in CI |
+
+The Python book is a reference implementation. A normal Python-only test run
+skips compiled parity tests; `make test-differential` and CI now fail if the
+extension was not built in the current build directory.
+
 ---
 
 ## What makes the numbers defensible
