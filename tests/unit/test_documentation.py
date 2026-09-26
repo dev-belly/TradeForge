@@ -247,7 +247,7 @@ class TestTheHeadlineClaim:
         configs = load_configs(ROOT / "configs")
         validate_required(configs)
         harness = ExecutionHarness(configs)
-        context = harness.run(RunRequest(policy="twap", style="passive", seed=20260908))
+        context = harness.run(RunRequest(policy="twap", style="aggressive", seed=20260908))
         assert context.tca is not None
 
         metrics = context.tca.metrics
