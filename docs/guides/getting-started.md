@@ -43,7 +43,8 @@ make report        # self-contained HTML reports in artifacts/reports/
 make db-query NAME=02_benchmark_disagreement
 ```
 
-`make demo` prints:
+`make demo` prints all four algorithms in both styles. The first two rows, with
+the `participation` column dropped for width:
 
 ```
 policy       style       fill     maker   vs_arrival_bps  vs_vwap_bps  is_bps

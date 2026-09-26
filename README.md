@@ -186,7 +186,7 @@ tests/             unit · integration · property · leakage · architecture ·
 | Command | What it does |
 |---|---|
 | `make demo` | Four algorithms, two styles, one table |
-| `make test` | The Python suite (310 test functions; the architecture suite alone expands to 506 parametrised cases) |
+| `make test` | The Python suite (322 test functions; the architecture suite alone expands to 506 parametrised cases) |
 | `make test-differential` | Builds the C++ core and proves it matches Python |
 | `make research` | Grids A–E with bootstrap intervals and paired comparisons |
 | `make ml` | Fill-probability baselines plus two leakage checks |
@@ -280,7 +280,7 @@ If that interpreter cannot import the dependencies, `make` says so in one
 sentence rather than printing a traceback.
 
 ```
-pytest         310 test functions in six suites: unit, integration, property,
+pytest         322 test functions in six suites: unit, integration, property,
                leakage, architecture, differential
 ruff + mypy    lint and type check, both clean. `make typecheck` and
                `make lint` are the commands CI runs; both pass locally too.
