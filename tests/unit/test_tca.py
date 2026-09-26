@@ -76,6 +76,20 @@ def observer():
 
 
 class TestBenchmarks:
+    def test_twap_is_unavailable_without_elapsed_observation_time(self):
+        obs = MarketObserver(start_ns=START, end_ns=END)
+        obs.observe(_trade_event(START, 10_000, 100), _state(START, 9_999, 10_001))
+        one = compute_benchmarks(obs, start_ns=START, end_ns=END)
+        assert one.arrival_mid_ticks == 10_000
+        assert one.interval_twap_ticks is None
+        assert one.coverage()["twap_available"] is False
+        assert obs.time_weighted_mid() is None
+
+        obs.observe(_trade_event(START, 10_100, 100), _state(START, 10_099, 10_101))
+        same_time = compute_benchmarks(obs, start_ns=START, end_ns=END)
+        assert same_time.interval_twap_ticks is None
+        assert obs.time_weighted_mid() is None
+
     def test_vwap_is_the_volume_weighted_trade_price(self):
         obs = MarketObserver(start_ns=START, end_ns=END)
         obs.observe(_trade_event(START, 10_000, 300), _state(START, 9_999, 10_001))

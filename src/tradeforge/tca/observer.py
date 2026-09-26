@@ -137,7 +137,7 @@ class MarketObserver:
         more events arrive when the book is active.
         """
         if len(self._mids) < 2:
-            return self._mids[0].mid_ticks if self._mids else None
+            return None
         total = 0.0
         for left, right in zip(self._mids, self._mids[1:], strict=False):
             span = right.timestamp_ns - left.timestamp_ns
@@ -146,7 +146,7 @@ class MarketObserver:
             total += 0.5 * (left.mid_ticks + right.mid_ticks) * span
         duration = self._mid_times[-1] - self._mid_times[0]
         if duration <= 0:
-            return self._mids[0].mid_ticks
+            return None
         return total / duration
 
     def volume_weighted_price(self) -> float | None:

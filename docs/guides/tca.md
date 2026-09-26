@@ -19,6 +19,11 @@ arrival to terminal mid; the interval VWAP was about 7.04 bps below arrival.
 An aggressive TWAP run changes sign between arrival (−6.93 bps) and
 interval VWAP (+0.11 bps).
 
+Interval TWAP uses elapsed time between observed mids. If the window has only
+one mid, or all mids share a timestamp, no time-weighted average is measurable:
+the value and its cost are left missing. The observation count accompanies the
+benchmark so sparse coverage stays visible.
+
 ```bash
 make db-query NAME=02_benchmark_disagreement
 ```

@@ -83,8 +83,7 @@ def compute_benchmarks(observer: MarketObserver, *, start_ns: int, end_ns: int) 
     trades = [t for t in observer.trades if start_ns <= t.timestamp_ns <= end_ns]
     volume = sum(t.quantity_base for t in trades)
     twap: float | None = None
-    if mids:
-        twap = mids[0].mid_ticks
+    if len(mids) >= 2:
         duration = mids[-1].timestamp_ns - mids[0].timestamp_ns
         if duration > 0:
             weighted = sum(
