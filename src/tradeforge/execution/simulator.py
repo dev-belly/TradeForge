@@ -284,6 +284,16 @@ class ExecutionSimulator:
         self._submitted.append(order)
         self._decision_ns[order.client_order_id] = decision_ns
 
+        limit = self._decision_limit_ticks(order, snapshot)
+        if limit is None and order.style is not PlacementStyle.PASSIVE:
+            self._n_rejects += 1
+            report = self._oms.reject(
+                order, at_ns=decision_ns, reason="no two-sided book at decision time"
+            )
+            self._record(report)
+            return
+        order.price_ticks = limit
+
         allowed = self._guards.check_new_order(
             order,
             spec=self._spec,
@@ -295,16 +305,6 @@ class ExecutionSimulator:
             report = self._oms.reject(order, at_ns=decision_ns, reason=allowed.reason)
             self._record(report)
             return
-
-        limit = self._decision_limit_ticks(order, snapshot)
-        if limit is None and order.style is not PlacementStyle.PASSIVE:
-            self._n_rejects += 1
-            report = self._oms.reject(
-                order, at_ns=decision_ns, reason="no two-sided book at decision time"
-            )
-            self._record(report)
-            return
-        order.price_ticks = limit
 
         arrival_ns = self._latency.arrival_ns(decision_ns)
         self._clock.schedule(
@@ -340,6 +340,18 @@ class ExecutionSimulator:
     def _arrive_aggressive(
         self, order: ChildOrder, arrival_ns: int, snapshot: BookSnapshot
     ) -> None:
+        # For a sell, an improved bid can make the actual notional larger than
+        # the decision-time limit. Check the best arrival bid as an upper bound
+        # on every price this child could receive.
+        price_for_guard = order.price_ticks
+        if order.side is Side.SELL and snapshot.best_bid_ticks is not None:
+            price_for_guard = max(price_for_guard or 0, snapshot.best_bid_ticks)
+        allowed = self._guards.check_notional(order, spec=self._spec, price_ticks=price_for_guard)
+        if not allowed.allowed:
+            self._n_rejects += 1
+            report = self._oms.reject(order, at_ns=arrival_ns, reason=allowed.reason)
+            self._record(report)
+            return
         accept = self._oms.accept(order, at_ns=arrival_ns)
         self._record(accept)
         try:
@@ -398,6 +410,12 @@ class ExecutionSimulator:
                 at_ns=arrival_ns,
                 reason=f"empty {order.side.value} side: cannot post passively",
             )
+            self._record(report)
+            return
+        allowed = self._guards.check_notional(order, spec=self._spec, price_ticks=price)
+        if not allowed.allowed:
+            self._n_rejects += 1
+            report = self._oms.reject(order, at_ns=arrival_ns, reason=allowed.reason)
             self._record(report)
             return
         accept = self._oms.accept(order, at_ns=arrival_ns)

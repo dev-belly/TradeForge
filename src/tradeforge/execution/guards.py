@@ -94,10 +94,17 @@ class Guardrails:
             return GuardDecision(
                 False, f"inventory {projected} exceeds max {self._config.max_inventory_base}"
             )
-        if order.price_ticks is not None:
-            notional = float(spec.notional(order.price_ticks, order.quantity_base))
-            if notional > self._config.max_notional:
-                return GuardDecision(False, f"notional {notional:.2f} exceeds max")
+        return self.check_notional(order, spec=spec, price_ticks=order.price_ticks)
+
+    def check_notional(
+        self, order: ChildOrder, *, spec: InstrumentSpec, price_ticks: int | None
+    ) -> GuardDecision:
+        """Check a priced child before it can reach the simulated venue."""
+        if price_ticks is None:
+            return GuardDecision(True)
+        notional = float(spec.notional(price_ticks, order.quantity_base))
+        if notional > self._config.max_notional:
+            return GuardDecision(False, f"notional {notional:.2f} exceeds max")
         return GuardDecision(True)
 
     def check_participation(self, our_volume_base: int, market_volume_base: int) -> GuardDecision:
