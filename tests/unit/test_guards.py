@@ -7,6 +7,32 @@ from copy import deepcopy
 import pytest
 
 from tradeforge.application.harness import ExecutionHarness, RunRequest
+from tradeforge.domain.exceptions import ConfigurationError
+from tradeforge.execution.guards import GuardConfig
+
+
+@pytest.mark.parametrize(
+    "guards",
+    [
+        {"max_notional": float("nan")},
+        {"max_notional": float("inf")},
+        {"max_participation": float("nan")},
+        {"max_participation": 1.5},
+        {"max_child_order_base": 0},
+        {"max_open_orders": -1},
+        {"max_inventory_base": 0},
+        {"kill_switch_enabled": "maybe"},
+    ],
+)
+def test_invalid_guard_config_fails_before_simulation(guards):
+    with pytest.raises(ConfigurationError):
+        GuardConfig.from_dict({"guards": guards})
+
+
+def test_explicitly_disabled_kill_switch_remains_supported():
+    assert not GuardConfig.from_dict({"guards": {"kill_switch_enabled": False}}).kill_switch_enabled
+    with pytest.raises(ConfigurationError, match="finite and positive"):
+        GuardConfig(max_notional=float("nan"))
 
 
 @pytest.mark.parametrize("style", ["aggressive", "passive"])
