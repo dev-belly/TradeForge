@@ -131,8 +131,12 @@ rejected and the parent silently finishes unfilled. The bundled config sets it t
 25 000 against a 20 000 parent, so a 10× typo still trips but a legitimate sweep
 does not.
 
-A tripped guard cancels everything and stops trading for the remainder of the
-run; the reason is recorded in `metadata["guard_breaches"]`.
+All size, notional and order-count limits must be positive; participation must
+be finite and in `(0, 1]`. `NaN`, infinity and unrecognized kill-switch values
+fail at construction instead of disabling a comparison silently. A child that
+breaches a size or notional limit is rejected. A participation breach trips the
+kill switch when enabled, cancels working orders and stops further trading;
+the reason is recorded in `metadata["guard_breaches"]`.
 
 ## Reading the result
 

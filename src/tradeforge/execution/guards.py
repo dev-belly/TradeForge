@@ -7,9 +7,10 @@ replay approximation stays inside the range where it is defensible.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
-from ..domain.exceptions import GuardrailBreachError
+from ..domain.exceptions import ConfigurationError, GuardrailBreachError
 from ..domain.instrument import InstrumentSpec
 from ..domain.orders import ChildOrder
 
@@ -23,20 +24,39 @@ class GuardConfig:
     max_inventory_base: int = 1_000_000
     kill_switch_enabled: bool = True
 
+    def __post_init__(self) -> None:
+        for name in ("max_child_order_base", "max_open_orders", "max_inventory_base"):
+            value = getattr(self, name)
+            if type(value) is not int or value <= 0:
+                raise ConfigurationError(f"{name} must be a positive integer")
+        for name in ("max_notional", "max_participation"):
+            value = getattr(self, name)
+            if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
+                raise ConfigurationError(f"{name} must be finite and positive")
+        if self.max_participation > 1:
+            raise ConfigurationError("max_participation cannot exceed 1")
+        if type(self.kill_switch_enabled) is not bool:
+            raise ConfigurationError("kill_switch_enabled must be a boolean")
+
     @classmethod
     def from_dict(cls, payload: dict[str, object] | None) -> GuardConfig:
         guards = payload.get("guards", {}) if isinstance(payload, dict) else {}
         if not isinstance(guards, dict):
-            raise TypeError("replay config must contain a 'guards' mapping")
-        return cls(
-            max_child_order_base=int(str(guards.get("max_child_order_base", 100_000))),
-            max_notional=float(str(guards.get("max_notional", 10_000_000.0))),
-            max_participation=float(str(guards.get("max_participation", 0.25))),
-            max_open_orders=int(str(guards.get("max_open_orders", 50))),
-            max_inventory_base=int(str(guards.get("max_inventory_base", 1_000_000))),
-            kill_switch_enabled=str(guards.get("kill_switch_enabled", True)).lower()
-            in {"1", "true", "yes"},
-        )
+            raise ConfigurationError("replay config must contain a 'guards' mapping")
+        switch = str(guards.get("kill_switch_enabled", True)).strip().lower()
+        if switch not in {"1", "true", "yes", "0", "false", "no"}:
+            raise ConfigurationError("kill_switch_enabled must be true or false")
+        try:
+            return cls(
+                max_child_order_base=int(str(guards.get("max_child_order_base", 100_000))),
+                max_notional=float(str(guards.get("max_notional", 10_000_000.0))),
+                max_participation=float(str(guards.get("max_participation", 0.25))),
+                max_open_orders=int(str(guards.get("max_open_orders", 50))),
+                max_inventory_base=int(str(guards.get("max_inventory_base", 1_000_000))),
+                kill_switch_enabled=switch in {"1", "true", "yes"},
+            )
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(f"Invalid guard limit: {exc}") from exc
 
 
 @dataclass(frozen=True)
