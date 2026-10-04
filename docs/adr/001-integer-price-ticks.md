@@ -15,6 +15,13 @@ duplicate levels for values that are economically identical.
 * All prices inside `domain`, `orderbook`, `matching`, `replay`, `queue` are
   `int64` **ticks**.
 * `InstrumentSpec.tick_size` (a `Decimal`, not a float) converts to/from price.
+* Human prices round half-up using the exact integer ratio of the declared
+  decimal price and tick size. Caller Decimal precision, rounding, exponent
+  limits and arithmetic traps cannot change that conversion. Non-finite prices
+  and tick sizes are rejected.
+* `InstrumentSpec` price/notional conversions and `Fill.notional` construct the
+  decimal coefficient directly. They preserve the tick size's decimal quantum
+  without intermediate rounding, including in a low-precision caller context.
 * Conversion to float happens **only** at reporting / ML feature boundaries.
 * Tick count is bounded by `price_ticks * tick_size` and validated against
   `InstrumentSpec.price_bounds`.

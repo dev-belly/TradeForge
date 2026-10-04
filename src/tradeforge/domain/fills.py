@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .enums import LiquidityFlag, OrderStatus, ReportType, Side
+from .instrument import _decimal_times_int
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +41,7 @@ class Fill:
         survived: dead code that fails is worse than dead code that does not,
         because it looks usable.
         """
-        return Decimal(self.price_ticks) * tick_size * Decimal(self.quantity_base)
+        return _decimal_times_int(tick_size, self.price_ticks * self.quantity_base)
 
 
 @dataclass(frozen=True, slots=True)

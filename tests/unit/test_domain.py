@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal, Inexact, Rounded, localcontext
 
 import pytest
 
@@ -27,6 +27,35 @@ from tradeforge.domain.orders import ChildOrder
 
 
 class TestInstrument:
+    def test_price_and_notional_ignore_the_callers_decimal_context(self, instrument):
+        with localcontext() as context:
+            context.prec = 2
+            context.rounding = ROUND_DOWN
+            context.Emax = 1
+            context.Emin = -1
+            context.traps[Inexact] = True
+            context.traps[Rounded] = True
+            assert instrument.price_to_ticks("100.005") == 10_001
+            assert instrument.price_to_ticks("-100.005") == -10_001
+            assert instrument.price_to_ticks("99.994") == 9_999
+            assert instrument.ticks_to_decimal(10_005) == Decimal("100.05")
+            assert instrument.ticks_to_float(10_005) == pytest.approx(100.05)
+            assert instrument.notional(10_005, 13) == Decimal("1300.65")
+            assert context.prec == 2 and context.traps[Inexact]
+
+    def test_long_price_below_half_a_tick_does_not_round_up(self, instrument):
+        assert instrument.price_to_ticks("100.004" + "9" * 150) == 10_000
+
+    @pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+    def test_nonfinite_tick_size_is_rejected(self, value):
+        with pytest.raises(InstrumentError, match="finite"):
+            InstrumentSpec("X", Decimal(value), 1, "USD", 1, 2)
+
+    @pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+    def test_nonfinite_price_is_rejected(self, instrument, value):
+        with pytest.raises(InstrumentError, match="finite"):
+            instrument.price_to_ticks(value)
+
     def test_price_to_ticks_rounds_half_up(self, instrument):
         assert instrument.price_to_ticks("100.00") == 10_000
         assert instrument.price_to_ticks("100.005") == 10_001
@@ -117,6 +146,11 @@ class TestSignConventions:
             sequence_id=1,
         )
         assert fill.notional(Decimal("0.01")) == Decimal("20010.00")
+        with localcontext() as context:
+            context.prec = 2
+            context.traps[Inexact] = True
+            context.traps[Rounded] = True
+            assert fill.notional(Decimal("0.01")) == Decimal("20010.00")
 
 
 class TestOrderStateMachine:
