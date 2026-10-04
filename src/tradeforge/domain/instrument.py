@@ -8,9 +8,22 @@ exactly one place where the rule can be violated.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal, InvalidOperation
 
 from .exceptions import InstrumentError
+
+
+def _decimal_times_int(value: Decimal, multiplier: int) -> Decimal:
+    """Multiply a finite decimal coefficient without using arithmetic context."""
+    if not value.is_finite():
+        raise InstrumentError("decimal amount must be finite")
+    parts = value.as_tuple()
+    coefficient = 0
+    for digit in parts.digits:
+        coefficient = coefficient * 10 + digit
+    digits = Decimal(coefficient * abs(multiplier)).as_tuple().digits
+    sign = int(value.is_signed() != (multiplier < 0))
+    return Decimal((sign, digits, int(parts.exponent)))
 
 
 @dataclass(frozen=True)
@@ -25,8 +38,8 @@ class InstrumentSpec:
     price_band_upper_ticks: int
 
     def __post_init__(self) -> None:
-        if self.tick_size <= 0:
-            raise InstrumentError(f"tick_size must be positive, got {self.tick_size}")
+        if not self.tick_size.is_finite() or self.tick_size <= 0:
+            raise InstrumentError(f"tick_size must be finite and positive, got {self.tick_size}")
         if self.lot_size <= 0:
             raise InstrumentError(f"lot_size must be positive, got {self.lot_size}")
         if self.price_band_lower_ticks >= self.price_band_upper_ticks:
@@ -36,20 +49,30 @@ class InstrumentSpec:
 
     def price_to_ticks(self, price: float | str | Decimal) -> int:
         """Convert a human price to integer ticks, rounded half-up."""
-        dec = price if isinstance(price, Decimal) else Decimal(str(price))
-        ticks = (dec / self.tick_size).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-        return int(ticks)
+        try:
+            dec = price if isinstance(price, Decimal) else Decimal(str(price))
+        except InvalidOperation as error:
+            raise InstrumentError(f"invalid price: {price}") from error
+        if not dec.is_finite():
+            raise InstrumentError("price must be finite")
+        numerator, denominator = dec.as_integer_ratio()
+        tick_numerator, tick_denominator = self.tick_size.as_integer_ratio()
+        numerator *= tick_denominator
+        denominator *= tick_numerator
+        whole, remainder = divmod(abs(numerator), denominator)
+        rounded = whole + int(2 * remainder >= denominator)
+        return -rounded if numerator < 0 else rounded
 
     def ticks_to_decimal(self, price_ticks: int) -> Decimal:
         """Exact price. Use for notional and for anything that is reported."""
-        return Decimal(price_ticks) * self.tick_size
+        return _decimal_times_int(self.tick_size, price_ticks)
 
     def ticks_to_float(self, price_ticks: int) -> float:
         """Lossy conversion for reporting / plotting only.
 
         Never feed the result back into book or matching logic.
         """
-        return float(Decimal(price_ticks) * self.tick_size)
+        return float(self.ticks_to_decimal(price_ticks))
 
     def validate_price_ticks(self, price_ticks: int) -> None:
         if not self.price_band_lower_ticks <= price_ticks <= self.price_band_upper_ticks:
@@ -71,7 +94,7 @@ class InstrumentSpec:
     # ------------------------------------------------------------- notional
 
     def notional(self, price_ticks: int, quantity_base: int) -> Decimal:
-        return self.ticks_to_decimal(price_ticks) * Decimal(int(quantity_base))
+        return _decimal_times_int(self.tick_size, price_ticks * int(quantity_base))
 
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> InstrumentSpec:
