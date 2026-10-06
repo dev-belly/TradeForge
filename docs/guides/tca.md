@@ -107,6 +107,14 @@ quotes must supply the same history for partial fills; the default of zero
 quotes a first fill. `fee_bps` uses the same argument. Fee quotes are stateless,
 and `describe()` includes the minimum so replay cost settings remain visible.
 
+Fee amounts use exact rational arithmetic on the declared decimal notional and
+the decimal spelling of each configured rate. Maker fee and rebate are
+converted separately before subtraction. The returned `Decimal` is constructed
+from its coefficient; caller precision, exponent limits and arithmetic traps
+cannot round a partial-fill commission to zero or change a rebate. `fee_bps`
+converts the exact ratio to a float only at the reporting boundary. No currency
+quantum or broker-specific rounding policy is implied by this research model.
+
 ## Markouts
 
 A markout measures where the mid went *after* our fill. **Positive is adverse.**
