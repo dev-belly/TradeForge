@@ -7,6 +7,8 @@ fees:
   # Positive = rebate (cost reduction) for providing liquidity.
   maker_rebate_bps: 0.2
   commission_per_share: 0.0005
+  # Broker minimum per filled child order, shared across its partial fills.
+  # Venue fees and maker rebates are added separately.
   min_commission_per_order: 0.0
   currency: "USD"
 

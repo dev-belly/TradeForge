@@ -480,7 +480,12 @@ class ExecutionSimulator:
         if quantity_base <= 0:
             return
         notional = self._spec.notional(price_ticks, quantity_base)
-        fee = self._fees.fee(notional=notional, liquidity=liquidity, quantity_base=quantity_base)
+        fee = self._fees.fee(
+            notional=notional,
+            liquidity=liquidity,
+            quantity_base=quantity_base,
+            filled_before_base=order.filled_base,
+        )
         report = self._oms.fill(
             order,
             quantity_base=quantity_base,
@@ -578,5 +583,10 @@ class FeeModelLike(Protocol):
     """Only the fee call the simulator needs."""
 
     def fee(
-        self, *, notional: Decimal, liquidity: LiquidityFlag, quantity_base: int = 0
+        self,
+        *,
+        notional: Decimal,
+        liquidity: LiquidityFlag,
+        quantity_base: int = 0,
+        filled_before_base: int = 0,
     ) -> Decimal: ...
