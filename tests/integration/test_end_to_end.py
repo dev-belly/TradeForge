@@ -45,6 +45,80 @@ class TestDeterminism:
 
 
 class TestExecutionOutcome:
+    def test_partial_fills_share_one_commission_minimum_per_child_order(self, configs, tmp_path):
+        import copy
+        import csv
+        from collections import Counter
+        from decimal import Decimal
+
+        effective = copy.deepcopy(configs)
+        options = effective["market_data"]["source"]["options"]
+        start = options["start_time_ns"]
+        path = tmp_path / "synthetic-split-fill.csv"
+        with path.open("w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "sequence_id",
+                    "exchange_timestamp_ns",
+                    "symbol",
+                    "event_type",
+                    "side",
+                    "price_ticks",
+                    "quantity_base",
+                ]
+            )
+            # Consume the queue ahead, then print three partial fills on one order.
+            for sequence, (offset, event, side, price, quantity) in enumerate(
+                [
+                    (0, "ADD", "BUY", 9999, 300),
+                    (0, "ADD", "SELL", 10001, 300),
+                    (5_000_000_000, "ADD", "BUY", 9998, 300),
+                    (6_000_000_000, "TRADE", "SELL", 9999, 300),
+                    (6_000_000_001, "ADD", "BUY", 9999, 200),
+                    (7_000_000_000, "TRADE", "SELL", 9999, 50),
+                    (8_000_000_000, "TRADE", "SELL", 9999, 50),
+                    (9_000_000_000, "TRADE", "SELL", 9999, 100),
+                    (10_000_000_000, "ADD", "BUY", 9999, 300),
+                ]
+            ):
+                writer.writerow([sequence, start + offset, "SYNTH", event, side, price, quantity])
+        effective["market_data"]["source"]["adapter"] = "normalized"
+        options["path"] = str(path)
+        effective["execution"]["parent_order"]["start_offset_ns"] = 0
+        effective["execution"]["parent_order"]["end_offset_ns"] = 10_000_000_000
+        # TWAP emits the first half inside the window; cancel the second half at its end.
+        effective["execution"]["policies"]["twap"]["end_of_window"] = "cancel"
+        effective["replay"]["guards"]["max_participation"] = 1.0
+        effective["costs"]["tca"]["markout_horizons_ns"] = [1_000_000]
+        effective["costs"]["fees"].update(
+            taker_fee_bps=0,
+            maker_fee_bps=0,
+            maker_rebate_bps=0,
+            commission_per_share=0,
+            min_commission_per_order=5,
+        )
+        result = (
+            ExecutionHarness(effective)
+            .run(
+                RunRequest(
+                    policy="twap",
+                    style="passive",
+                    quantity_base=400,
+                    n_slices=2,
+                    seed=11,
+                    latency_ns=1_000_000,
+                )
+            )
+            .result
+        )
+        assert result is not None
+        assert result.fills, result.reports
+        fills_per_order = Counter(fill.client_order_id for fill in result.fills)
+        assert list(fills_per_order.values()) == [3]
+        assert [fill.quantity_base for fill in result.fills] == [50, 50, 100]
+        assert result.fees_total == Decimal("5") * len(fills_per_order)
+
     def test_a_complete_execution_reports_a_full_fill_ratio(self, twap_passive):
         result = twap_passive.result
         assert result is not None

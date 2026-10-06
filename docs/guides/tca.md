@@ -86,6 +86,27 @@ is not describing the execution and should not be quoted.
 make db-query NAME=03_cost_attribution
 ```
 
+### Commission minima and partial fills
+
+`min_commission_per_order` applies to the broker commission for each filled
+**child order**. Venue fees and maker rebates are calculated independently.
+For a USD 10,000 taker fill at 10 bps, USD 0.01 per share on 100 shares and a
+USD 5 commission minimum, the fee is USD 10 + max(USD 1, USD 5) = USD 15.
+A USD 10 maker rebate under the same commission settings instead gives a net
+fee of −USD 5. These are arithmetic examples, not a real venue's fee schedule.
+
+The first partial fill incurs the minimum. Later fills on the same child order
+pay only the increase in cumulative commission. At USD 0.01 per share with a
+USD 5 minimum, successive fills of 100, 200 and 500 shares incur USD 5, USD 0
+and USD 3: the order's total commission is USD 8. A child order cancelled after
+its first fill retains the minimum; an order with no fills incurs no commission.
+
+The simulator passes the child order's quantity already filled to
+`FeeModel.fee(..., filled_before_base=...)` before updating the OMS. Standalone
+quotes must supply the same history for partial fills; the default of zero
+quotes a first fill. `fee_bps` uses the same argument. Fee quotes are stateless,
+and `describe()` includes the minimum so replay cost settings remain visible.
+
 ## Markouts
 
 A markout measures where the mid went *after* our fill. **Positive is adverse.**
