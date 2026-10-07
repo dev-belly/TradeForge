@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from fractions import Fraction
 
 from ..domain.enums import LiquidityFlag
 
@@ -28,6 +29,24 @@ class FeeConfig:
             commission_per_share=float(str(fees.get("commission_per_share", 0.0))),
             min_commission_per_order=float(str(fees.get("min_commission_per_order", 0.0))),
         )
+
+
+def _exact_decimal(value: Fraction) -> Decimal:
+    """Construct a terminating decimal without caller arithmetic settings."""
+    denominator = value.denominator
+    twos = fives = 0
+    while denominator % 2 == 0:
+        denominator //= 2
+        twos += 1
+    while denominator % 5 == 0:
+        denominator //= 5
+        fives += 1
+    if denominator != 1:
+        raise ValueError("Fee amount is not a terminating decimal")
+    scale = max(twos, fives)
+    coefficient = abs(value.numerator) * 2 ** (scale - twos) * 5 ** (scale - fives)
+    digits = Decimal(coefficient).as_tuple().digits
+    return Decimal((int(value < 0), digits, -scale))
 
 
 class FeeModel:
@@ -55,24 +74,29 @@ class FeeModel:
         if type(filled_before_base) is not int or filled_before_base < 0:
             raise ValueError("filled_before_base must be a non-negative integer")
         if liquidity is LiquidityFlag.TAKER:
-            rate_bps = self._config.taker_fee_bps
+            rate_bps = Fraction(str(self._config.taker_fee_bps))
         elif liquidity is LiquidityFlag.MAKER:
-            rate_bps = self._config.maker_fee_bps - self._config.maker_rebate_bps
+            rate_bps = Fraction(str(self._config.maker_fee_bps)) - Fraction(
+                str(self._config.maker_rebate_bps)
+            )
         else:
-            rate_bps = max(self._config.taker_fee_bps, self._config.maker_fee_bps)
-        exchange_fee = notional * Decimal(str(rate_bps)) / Decimal("10000")
-        per_share = Decimal(str(self._config.commission_per_share))
-        commission = per_share * Decimal(quantity_base)
-        minimum = Decimal(str(self._config.min_commission_per_order))
+            rate_bps = max(
+                Fraction(str(self._config.taker_fee_bps)),
+                Fraction(str(self._config.maker_fee_bps)),
+            )
+        exchange_fee = Fraction(notional) * rate_bps / 10000
+        per_share = Fraction(str(self._config.commission_per_share))
+        commission = per_share * quantity_base
+        minimum = Fraction(str(self._config.min_commission_per_order))
         if minimum > 0 and quantity_base > 0:
-            due = max(per_share * Decimal(filled_before_base + quantity_base), minimum)
+            due = max(per_share * (filled_before_base + quantity_base), minimum)
             paid = (
-                max(per_share * Decimal(filled_before_base), minimum)
+                max(per_share * filled_before_base, minimum)
                 if filled_before_base > 0
-                else Decimal("0")
+                else Fraction(0)
             )
             commission = due - paid
-        return exchange_fee + commission
+        return _exact_decimal(exchange_fee + commission)
 
     def fee_bps(
         self,
@@ -90,7 +114,7 @@ class FeeModel:
         )
         if notional == 0:
             return 0.0
-        return float(fee / notional * Decimal("10000"))
+        return float(Fraction(fee) / Fraction(notional) * 10000)
 
     def describe(self) -> dict[str, float]:
         return {
