@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from math import isfinite
 
@@ -16,10 +16,11 @@ def _fee_parameter(value: object, name: str) -> float:
     if isinstance(value, bool):
         raise ValueError(message)
     try:
-        number = float(str(value))
-    except (ValueError, OverflowError) as error:
+        declared = Decimal(str(value))
+        number = float(declared)
+    except (InvalidOperation, ValueError, OverflowError) as error:
         raise ValueError(message) from error
-    if not isfinite(number) or number < 0:
+    if not declared.is_finite() or declared < 0 or not isfinite(number):
         raise ValueError(message)
     return number
 
