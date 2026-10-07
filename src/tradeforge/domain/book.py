@@ -127,9 +127,9 @@ class MarketState:
     last_trade_ticks: int | None
     last_trade_qty_base: int
     aggressor_side_known: bool
-    # Cumulative traded volume since the start of the stream. POV differences
-    # consecutive readings to get interval volume, so this must never be a
-    # rolling window (see MicrostructureEngine._total_market_volume).
+    # Cumulative traded volume from the feature engine's stream. The simulator
+    # subtracts warm-up volume before passing a copy to policies. POV differences
+    # consecutive readings inside the parent window; this is never rolling volume.
     market_volume_base: int = 0
     # Rolling-window traded volume (a different quantity from the above).
     recent_volume_base: int = 0

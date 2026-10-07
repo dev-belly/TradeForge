@@ -299,7 +299,9 @@ class ExecutionHarness:
             book=book,
             validator=validator,
             features=MicrostructureEngine(),
-            clock=SimulationClock(parent.start_ns),
+            # Rebuild the book from earlier events before the parent window.
+            # Starting at parent.start_ns rejects valid warm-up as time travel.
+            clock=SimulationClock(),
             queue_model=create_queue_model(mode, data_type, cancel_policy),
             latency=build_latency_model(self._latency_config(request)),
             fees=FeeModel(FeeConfig.from_dict(section(self._configs, "costs"))),

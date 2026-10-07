@@ -22,7 +22,7 @@ guessed: from an unattributed print we cannot say which side was consumed.
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from functools import partial
 from typing import Protocol
@@ -48,6 +48,7 @@ from ..matching.engine import match_order, resting_price_ticks
 from .guards import Guardrails
 from .oms import Oms
 from .policies.base import ExecutionPolicyBase
+from .ports import FeeModelLike
 from .result import ExecutionResult
 
 
@@ -115,6 +116,7 @@ class ExecutionSimulator:
         self._fees_total = Decimal("0")
         self._notional = Decimal("0")
         self._market_volume_base = 0
+        self._warmup_volume_base = 0
         self._n_rejects = 0
         self._n_cancels = 0
         self._arrival_mid_ticks: float | None = None
@@ -150,6 +152,8 @@ class ExecutionSimulator:
 
     def observe_event(self, event: MarketEvent) -> None:
         """Called with the book in its PRE-event state (level sizes still old)."""
+        if event.exchange_timestamp_ns < self._parent.start_ns:
+            return
         if event.event_type is EventType.TRADE:
             self._observe_trade(event)
         elif event.event_type in (EventType.CANCEL, EventType.MODIFY, EventType.REPLACE):
@@ -160,7 +164,8 @@ class ExecutionSimulator:
     def _observe_trade(self, event: MarketEvent) -> None:
         if event.price_ticks is None or not event.quantity_base:
             return
-        self._market_volume_base += event.quantity_base
+        if event.exchange_timestamp_ns <= self._parent.end_ns:
+            self._market_volume_base += event.quantity_base
         aggressor = event.aggressor_side() or event.side
         if aggressor is None:
             # Unattributed print: we cannot say which side was consumed, so no
@@ -214,14 +219,23 @@ class ExecutionSimulator:
 
     def observe_state(self, state: MarketState, snapshot: BookSnapshot) -> None:
         """Feed the policy and submit whatever it decides, through latency."""
-        if state.market_volume_base > self._market_volume_base:
-            self._market_volume_base = state.market_volume_base
-        if state.has_two_sided_book:
-            if self._arrival_mid_ticks is None:
-                self._arrival_mid_ticks = state.mid_ticks
-                self._arrival_ns = state.timestamp_ns
-            self._terminal_mid_ticks = state.mid_ticks
         self._last_state_ns = state.timestamp_ns
+        if state.timestamp_ns < self._parent.start_ns:
+            self._warmup_volume_base = state.market_volume_base
+            return
+        if self._warmup_volume_base:
+            state = replace(
+                state,
+                market_volume_base=max(state.market_volume_base - self._warmup_volume_base, 0),
+            )
+        if state.timestamp_ns <= self._parent.end_ns:
+            if state.market_volume_base > self._market_volume_base:
+                self._market_volume_base = state.market_volume_base
+            if state.has_two_sided_book:
+                if self._arrival_mid_ticks is None:
+                    self._arrival_mid_ticks = state.mid_ticks
+                    self._arrival_ns = state.timestamp_ns
+                self._terminal_mid_ticks = state.mid_ticks
 
         if self._window_closed:
             return
@@ -528,7 +542,11 @@ class ExecutionSimulator:
 
     def finalize(self, state: MarketState | None = None) -> ExecutionResult:
         """Close out working orders and freeze the result."""
-        if state is not None and state.has_two_sided_book:
+        if (
+            state is not None
+            and self._parent.start_ns <= state.timestamp_ns <= self._parent.end_ns
+            and state.has_two_sided_book
+        ):
             self._terminal_mid_ticks = state.mid_ticks
         # The benchmark window is the parent's decision window, not wherever the
         # event stream happened to stop.
@@ -577,16 +595,3 @@ class ExecutionSimulator:
                 "end_of_window": self._policy.end_of_window,
             },
         )
-
-
-class FeeModelLike(Protocol):
-    """Only the fee call the simulator needs."""
-
-    def fee(
-        self,
-        *,
-        notional: Decimal,
-        liquidity: LiquidityFlag,
-        quantity_base: int = 0,
-        filled_before_base: int = 0,
-    ) -> Decimal: ...
