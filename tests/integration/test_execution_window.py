@@ -140,6 +140,9 @@ def test_sparse_feed_closes_at_deadline_without_using_future_book(window_configs
     # the next quote arrives at t+3s. There is no event at t+2s.
     window_configs["execution"]["parent_order"]["end_offset_ns"] = 1_000_000_000
     window_configs["execution"]["policies"]["twap"]["end_of_window"] = "sweep_marketable"
+    # Keep replaying the first post-window tick for markouts, without feeding it
+    # back into the execution decision.
+    window_configs["costs"]["tca"]["markout_horizons_ns"] = [2_000_000_000]
     with open(path, newline="") as handle:
         rows = list(csv.reader(handle))
     rows = [rows[0], *(row for row in rows[1:] if int(row[1]) != end_ns)]
