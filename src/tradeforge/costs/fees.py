@@ -3,10 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from fractions import Fraction
+from math import isfinite
 
 from ..domain.enums import LiquidityFlag
+
+
+def _fee_parameter(value: object, name: str) -> float:
+    """Read a non-negative finite fee or rebate amount, never a boolean."""
+    message = f"{name} must be a finite non-negative number, not a boolean"
+    if isinstance(value, bool):
+        raise ValueError(message)
+    try:
+        declared = Decimal(str(value))
+        number = float(declared)
+    except (InvalidOperation, ValueError, OverflowError) as error:
+        raise ValueError(message) from error
+    if not declared.is_finite() or declared < 0 or not isfinite(number):
+        raise ValueError(message)
+    return number
 
 
 @dataclass(frozen=True)
@@ -17,17 +33,35 @@ class FeeConfig:
     commission_per_share: float = 0.0
     min_commission_per_order: float = 0.0
 
+    def __post_init__(self) -> None:
+        for name in (
+            "taker_fee_bps",
+            "maker_fee_bps",
+            "maker_rebate_bps",
+            "commission_per_share",
+            "min_commission_per_order",
+        ):
+            object.__setattr__(self, name, _fee_parameter(getattr(self, name), name))
+
     @classmethod
     def from_dict(cls, payload: dict[str, object] | None) -> FeeConfig:
-        fees = payload.get("fees", {}) if isinstance(payload, dict) else {}
+        if payload is None:
+            return cls()
+        if not isinstance(payload, dict):
+            raise TypeError("costs config must be a mapping or None")
+        fees = payload.get("fees", {})
         if not isinstance(fees, dict):
             raise TypeError("costs config must contain a 'fees' mapping")
         return cls(
-            taker_fee_bps=float(str(fees.get("taker_fee_bps", 0.0))),
-            maker_fee_bps=float(str(fees.get("maker_fee_bps", 0.0))),
-            maker_rebate_bps=float(str(fees.get("maker_rebate_bps", 0.0))),
-            commission_per_share=float(str(fees.get("commission_per_share", 0.0))),
-            min_commission_per_order=float(str(fees.get("min_commission_per_order", 0.0))),
+            taker_fee_bps=_fee_parameter(fees.get("taker_fee_bps", 0.0), "taker_fee_bps"),
+            maker_fee_bps=_fee_parameter(fees.get("maker_fee_bps", 0.0), "maker_fee_bps"),
+            maker_rebate_bps=_fee_parameter(fees.get("maker_rebate_bps", 0.0), "maker_rebate_bps"),
+            commission_per_share=_fee_parameter(
+                fees.get("commission_per_share", 0.0), "commission_per_share"
+            ),
+            min_commission_per_order=_fee_parameter(
+                fees.get("min_commission_per_order", 0.0), "min_commission_per_order"
+            ),
         )
 
 
@@ -71,8 +105,14 @@ class FeeModel:
         quantity_base: int = 0,
         filled_before_base: int = 0,
     ) -> Decimal:
+        if type(quantity_base) is not int or quantity_base < 0:
+            raise ValueError("quantity_base must be a non-negative integer")
         if type(filled_before_base) is not int or filled_before_base < 0:
             raise ValueError("filled_before_base must be a non-negative integer")
+        if not isinstance(notional, Decimal) or not notional.is_finite() or notional < 0:
+            raise ValueError("notional must be a finite non-negative Decimal")
+        if not isinstance(liquidity, LiquidityFlag):
+            raise ValueError("liquidity must be a LiquidityFlag")
         if liquidity is LiquidityFlag.TAKER:
             rate_bps = Fraction(str(self._config.taker_fee_bps))
         elif liquidity is LiquidityFlag.MAKER:

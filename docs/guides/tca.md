@@ -107,6 +107,22 @@ quotes must supply the same history for partial fills; the default of zero
 quotes a first fill. `fee_bps` uses the same argument. Fee quotes are stateless,
 and `describe()` includes the minimum so replay cost settings remain visible.
 
+Fee rates, rebate rates, commission per share and the commission minimum must
+be finite non-negative numbers. Booleans, negative values, NaN and infinity
+are rejected when constructing or loading the fee configuration, before the
+execution starts. Numeric strings are accepted and normalized; omitted settings
+remain zero. Maker rebates reduce venue costs and may legitimately make the
+final net fee negative.
+
+The original decimal sign is checked before accepting a normalized float:
+negative amounts such as `-1e-9999` remain invalid even when converting them
+to a float would underflow to negative zero.
+
+Fee quotes require a finite non-negative `Decimal` notional, integer
+non-negative fill quantities and a `LiquidityFlag`. A boolean quantity is not
+one share. Both `fee` and `fee_bps` validate the same inputs, including zero
+notional quotes; malformed cost mappings do not silently become zero fees.
+
 Fee amounts use exact rational arithmetic on the declared decimal notional and
 the decimal spelling of each configured rate. Maker fee and rebate are
 converted separately before subtraction. The returned `Decimal` is constructed

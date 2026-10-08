@@ -45,6 +45,24 @@ class TestDeterminism:
 
 
 class TestExecutionOutcome:
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("taker_fee_bps", "NaN"),
+            ("commission_per_share", -0.01),
+            ("min_commission_per_order", -5),
+        ],
+    )
+    def test_invalid_fee_configs_fail_before_execution(self, configs, field, value):
+        import copy
+
+        effective = copy.deepcopy(configs)
+        effective["costs"]["fees"][field] = value
+        with pytest.raises(ValueError, match=field):
+            ExecutionHarness(effective).run(
+                RunRequest(policy="twap", style="passive", quantity_base=400, n_slices=2)
+            )
+
     def test_partial_fills_share_one_commission_minimum_per_child_order(self, configs, tmp_path):
         import copy
         import csv
