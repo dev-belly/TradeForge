@@ -255,6 +255,35 @@ class ExecutionSimulator:
         for order in self._policy.on_market_event(state):
             self.submit(order, decision_ns=state.timestamp_ns, snapshot=snapshot)
 
+    def close_at_deadline(
+        self, last_state: MarketState | None, last_snapshot: BookSnapshot | None
+    ) -> None:
+        """Close at the actual deadline, never with a later market observation.
+
+        A market feed need not contain an event exactly at parent.end_ns. The
+        replay driver advances the clock to that deadline before consuming its
+        first later event, and supplies the last in-window market state. This
+        lets end-of-window policies decide with information already observed.
+        """
+        if self._window_closed:
+            return
+        if (
+            last_state is None
+            or last_snapshot is None
+            or last_state.timestamp_ns < self._parent.start_ns
+        ):
+            # No observable in-window state: never invent an arrival benchmark
+            # or sweep with a book assembled solely before the parent opened.
+            self._window_closed = True
+            return
+        deadline_state = replace(last_state, timestamp_ns=self._parent.end_ns)
+        last_observed_ns = self._last_state_ns
+        try:
+            self.observe_state(deadline_state, last_snapshot)
+        finally:
+            # The deadline is an internal timer, not a new market observation.
+            self._last_state_ns = last_observed_ns
+
     def _expire_stale_passive(self, at_ns: int) -> None:
         """Cancel/repost: a passive order resting past the horizon is pulled.
 
