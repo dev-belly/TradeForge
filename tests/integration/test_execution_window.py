@@ -166,3 +166,23 @@ def test_sparse_feed_closes_at_deadline_without_using_future_book(window_configs
     assert len(result.fills) == 1 and result.fills[0].timestamp_ns == end_ns
     assert result.terminal_mid_ticks == 10000.5
     assert result.metadata["last_observed_ns"] == session_start + 3_000_000_000
+
+
+def test_no_in_window_quote_does_not_sweep_from_later_tick(window_configs):
+    """Warm-up prices cannot become a fabricated in-window arrival or sweep."""
+    window_configs["execution"]["parent_order"].update(
+        start_offset_ns=2_500_000_000,
+        end_offset_ns=250_000_000,
+    )
+    window_configs["execution"]["policies"]["twap"]["end_of_window"] = "sweep_marketable"
+    window_configs["costs"]["tca"]["markout_horizons_ns"] = [1_000_000_000]
+    context = ExecutionHarness(window_configs).run(
+        RunRequest(policy="twap", style="aggressive", quantity_base=100, n_slices=2)
+    )
+    result = context.result
+    assert result is not None
+    assert context.outcome.n_events == 6
+    assert result.child_orders == () and result.fills == ()
+    assert result.arrival_mid_ticks is None
+    assert result.terminal_mid_ticks is None
+    assert result.metadata["arrival_ns"] is None
