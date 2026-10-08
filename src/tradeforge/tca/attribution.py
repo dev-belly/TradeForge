@@ -30,15 +30,13 @@ Component signs (positive = worse):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 
 from ..domain.fills import Fill, signed_cost_bps
 from ..domain.instrument import InstrumentSpec
 from ..execution.result import ExecutionResult
 from .benchmarks import BenchmarkPrices
+from .metrics import compute_cost_metrics, fees_per_arrival_notional_bps
 from .observer import MarketObserver
-
-BPS = 10_000.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,13 +97,12 @@ def compute_attribution(
     spec: InstrumentSpec,
 ) -> CostAttribution:
     """Decompose realised cost into spread, fees, timing, residual, opportunity."""
-    del spec  # tick size is not needed: every ratio is already dimensionless
     arrival = benchmarks.arrival_mid_ticks
     side = result.side
 
     spread = _volume_weighted_spread(result.fills, observer)
     timing = _volume_weighted_timing(result.fills, observer, arrival)
-    fees = _fees_bps(result)
+    fees = fees_per_arrival_notional_bps(result.fees_total, arrival, result.filled_base, spec)
     without_mid = _count_fills_without_mid(result.fills, observer)
     explained = (
         None
@@ -115,7 +112,7 @@ def compute_attribution(
 
     is_filled: float | None = None
     if arrival is not None and arrival > 0 and result.avg_fill_price_ticks is not None:
-        is_filled = signed_cost_bps(side, result.avg_fill_price_ticks, arrival)
+        is_filled = signed_cost_bps(side, result.avg_fill_price_ticks, arrival) + (fees or 0.0)
 
     residual: float | None = None
     if is_filled is not None and explained is not None:
@@ -126,10 +123,7 @@ def compute_attribution(
     if arrival is not None and arrival > 0 and terminal is not None:
         opportunity = signed_cost_bps(side, terminal, arrival)
 
-    is_total: float | None = None
-    r = result.completion_rate
-    if (r == 0 or is_filled is not None) and (r == 1 or opportunity is not None):
-        is_total = (is_filled or 0.0) * r + (opportunity or 0.0) * (1.0 - r)
+    is_total = compute_cost_metrics(result, benchmarks, spec).implementation_shortfall_bps
 
     return CostAttribution(
         fill_ratio=result.completion_rate,
@@ -147,13 +141,6 @@ def compute_attribution(
 
 
 # --------------------------------------------------------------------- pieces
-
-
-def _fees_bps(result: ExecutionResult) -> float | None:
-    """Fees as a fraction of executed notional. Negative = net rebate."""
-    if result.notional <= 0:
-        return None
-    return float(result.fees_total / Decimal(result.notional) * Decimal(str(BPS)))
 
 
 def _count_fills_without_mid(fills: tuple[Fill, ...], observer: MarketObserver) -> int:

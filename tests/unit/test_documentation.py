@@ -200,7 +200,7 @@ class TestTheHeadlineClaim:
                 rows[(policy, style)] = {
                     "fill_ratio": metrics.fill_ratio,
                     "maker_fill_ratio": metrics.maker_fill_ratio,
-                    "vs_arrival_bps": metrics.implementation_shortfall_bps,
+                    "vs_arrival_bps": metrics.cost_vs_arrival_bps,
                 }
         return rows
 

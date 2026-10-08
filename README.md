@@ -100,8 +100,15 @@ cost is −6.93 bps; interval-VWAP cost is +0.11 bps. Passive TWAP scores −7.9
 and −0.90 bps respectively. The benchmark gap reflects market drift; neither
 number alone measures execution skill.
 
+The demo separately reports fee-inclusive implementation shortfall: passive
+TWAP is -8.025 bps after its net rebate, while aggressive TWAP is -5.472 bps
+after its fees. The price-only comparisons above remain available alongside
+`price_shortfall_bps`. [Twenty cash-cost regressions](tests/unit/test_tca_fees.py)
+reconcile the headline, attribution, Parquet and SQL across BUY/SELL, partial
+fills and rebates; fees cannot disappear into an equal negative residual.
+
 **2. With three sessions, no algorithm is distinguishable from any other.** The
-paired comparison of VWAP against TWAP gives a mean difference of +0.013 bps
+fee-inclusive paired comparison of VWAP against TWAP gives a mean difference of +0.013 bps
 with a 95% interval of [−0.001, +0.037] and a sign-test p-value of 1.000. The
 platform reports this rather than quoting the point estimate, and applies
 Holm-Bonferroni across the family of comparisons.

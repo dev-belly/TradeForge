@@ -49,8 +49,8 @@ the `participation` column dropped for width:
 ```
 policy       style       fill     maker   vs_arrival_bps  vs_vwap_bps  is_bps
 -----------  ----------  -------  ------  --------------  -----------  -------
-twap         passive     100.00%  96.3%   -7.9369         -0.8977      -7.9369
-twap         aggressive  100.00%  5.1%    -6.9336         0.1063       -6.9336
+twap         passive     100.00%  96.3%   -7.9369         -0.8977      -8.0246
+twap         aggressive  100.00%  5.1%    -6.9336         0.1063       -5.4720
 ```
 
 **Stop and look at the two cost columns.** Passive TWAP beats both benchmarks;
@@ -60,6 +60,11 @@ execution with market drift during the window, so neither cost alone measures
 the scheduling policy's skill.
 
 If you take one thing from this repository, take that.
+
+`vs_arrival_bps` and `vs_vwap_bps` compare execution prices. `is_bps` includes
+explicit fees and net rebates, plus opportunity cost when the order is incomplete.
+Passive TWAP's net rebate makes its total slightly lower than its price cost;
+aggressive TWAP pays fees, making its total higher.
 
 ## Run one execution and read the whole report
 
@@ -73,10 +78,11 @@ metric                          value
 policy                          twap
 side                            BUY
 fill_ratio                      1
-participation_rate              0.0189
+participation_rate              0.02198
 cost_vs_arrival_bps             -7.9369
 cost_vs_vwap_bps                -0.8977
-implementation_shortfall_bps    -7.9369
+implementation_shortfall_bps    -8.0246
+price_shortfall_bps             -7.9369
 maker_fill_ratio                0.9634
 queue_mode                      APPROXIMATE
 latency_basis                   scenario

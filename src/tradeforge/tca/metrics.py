@@ -10,12 +10,16 @@ compared and bootstrapped without ever flipping a sign by hand.
 `implementation_shortfall_bps` is Perold's definition: the filled part is
 measured against the arrival price, and the unfilled part is charged at the
 end-of-window price. Both legs are weighted by their share of the *requested*
-quantity, so a strategy that fills 10% cheaply does not look good.
+quantity, so a strategy that fills 10% cheaply does not look good. Explicit
+fees, net of rebates, are added against requested arrival notional. The
+price-only counterpart is retained as `price_shortfall_bps`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
+from fractions import Fraction
 
 from ..domain.enums import Side
 from ..domain.fills import signed_cost_bps
@@ -61,6 +65,7 @@ class CostMetrics:
     # strong one in a table that only prints the cost column.
     n_mid_observations: int = 0
     n_trade_prints: int = 0
+    price_shortfall_bps: float | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -83,6 +88,7 @@ class CostMetrics:
             "cost_vs_interval_mid_bps": self.cost_vs_interval_mid_bps,
             "cost_vs_terminal_bps": self.cost_vs_terminal_bps,
             "implementation_shortfall_bps": self.implementation_shortfall_bps,
+            "price_shortfall_bps": self.price_shortfall_bps,
             "participation_rate": self.participation_rate,
             "maker_fill_ratio": self.maker_fill_ratio,
             "window_volume_base": self.window_volume_base,
@@ -101,6 +107,16 @@ def compute_cost_metrics(
     avg_fill = result.avg_fill_price_ticks
     arrival = benchmarks.arrival_mid_ticks
     fill_ratio = result.completion_rate
+    price_shortfall = _implementation_shortfall(
+        side=side,
+        avg_fill=avg_fill,
+        arrival=arrival,
+        terminal=benchmarks.terminal_mid_ticks,
+        fill_ratio=fill_ratio,
+    )
+    fee_cost = fees_per_arrival_notional_bps(
+        result.fees_total, arrival, result.requested_base, spec
+    )
 
     return CostMetrics(
         parent_order_id=result.parent_order_id,
@@ -121,19 +137,32 @@ def compute_cost_metrics(
         cost_vs_twap_bps=_cost(side, avg_fill, benchmarks.interval_twap_ticks),
         cost_vs_interval_mid_bps=_cost(side, avg_fill, benchmarks.interval_mid_ticks),
         cost_vs_terminal_bps=_cost(side, avg_fill, benchmarks.terminal_mid_ticks),
-        implementation_shortfall_bps=_implementation_shortfall(
-            side=side,
-            avg_fill=avg_fill,
-            arrival=arrival,
-            terminal=benchmarks.terminal_mid_ticks,
-            fill_ratio=fill_ratio,
+        implementation_shortfall_bps=(
+            price_shortfall + fee_cost
+            if price_shortfall is not None and fee_cost is not None
+            else None
         ),
+        price_shortfall_bps=price_shortfall,
         participation_rate=result.participation_rate,
         maker_fill_ratio=result.maker_fill_ratio,
         window_volume_base=benchmarks.window_volume_base,
         n_mid_observations=benchmarks.n_mid_observations,
         n_trade_prints=benchmarks.n_trade_prints,
     )
+
+
+def fees_per_arrival_notional_bps(
+    fees: Decimal, arrival: float | None, quantity_base: int, spec: InstrumentSpec
+) -> float | None:
+    """Cash fees over reference notional, independent of caller Decimal context.
+
+    Filled quantity gives the attribution's per-filled-share basis; requested
+    quantity gives total shortfall's basis. A fee worsens BUY and SELL equally.
+    """
+    if arrival is None or arrival <= 0 or quantity_base <= 0:
+        return None
+    notional = Fraction(str(arrival)) * Fraction(spec.tick_size) * quantity_base
+    return float(Fraction(fees) * 10_000 / notional)
 
 
 def _cost(side: Side, execution: float | None, benchmark: float | None) -> float | None:

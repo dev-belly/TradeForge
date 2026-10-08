@@ -425,6 +425,7 @@ class HtmlReportBuilder:
             "cost_vs_vwap_bps",
             "cost_vs_twap_bps",
             "implementation_shortfall_bps",
+            "price_shortfall_bps",
             "maker_fill_ratio",
         }
         rows = []
@@ -468,10 +469,10 @@ class HtmlReportBuilder:
             [
                 "implementation shortfall (filled)",
                 attribution.is_filled_bps,
-                "signed against the arrival price, per filled share",
+                "including fees, signed against the arrival price, per filled share",
             ],
             ["spread cost", attribution.spread_cost_bps, "negative for maker fills, which earn it"],
-            ["fees", attribution.fees_bps, "negative when rebates exceed fees"],
+            ["fees", attribution.fees_bps, "per filled arrival notional; negative for net rebates"],
             ["timing", attribution.timing_bps, "market drift between arrival and fills"],
             [
                 "residual (unexplained)",
