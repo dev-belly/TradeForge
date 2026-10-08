@@ -114,6 +114,10 @@ execution starts. Numeric strings are accepted and normalized; omitted settings
 remain zero. Maker rebates reduce venue costs and may legitimately make the
 final net fee negative.
 
+The original decimal sign is checked before accepting a normalized float:
+negative amounts such as `-1e-9999` remain invalid even when converting them
+to a float would underflow to negative zero.
+
 Fee quotes require a finite non-negative `Decimal` notional, integer
 non-negative fill quantities and a `LiquidityFlag`. A boolean quantity is not
 one share. Both `fee` and `fee_bps` validate the same inputs, including zero

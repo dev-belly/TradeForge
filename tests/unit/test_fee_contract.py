@@ -18,7 +18,9 @@ from tradeforge.domain.enums import LiquidityFlag
         "min_commission_per_order",
     ],
 )
-@pytest.mark.parametrize("value", [-0.01, float("nan"), float("inf"), True])
+@pytest.mark.parametrize(
+    "value", [-0.01, float("nan"), float("inf"), True, "-1e-9999", Decimal("-1e-9999")]
+)
 def test_invalid_parameters_fail_at_direct_construction_and_config_loading(field, value):
     with pytest.raises(ValueError, match=field):
         FeeConfig(**{field: value})
