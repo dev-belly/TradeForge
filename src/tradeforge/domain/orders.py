@@ -18,7 +18,7 @@ from .enums import (
 from .exceptions import OrderStateError
 
 ALLOWED_ORDER_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
-    OrderStatus.NEW: frozenset({OrderStatus.ACCEPTED, OrderStatus.REJECTED}),
+    OrderStatus.NEW: frozenset({OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.CANCELLED}),
     OrderStatus.ACCEPTED: frozenset(
         {
             OrderStatus.PARTIALLY_FILLED,

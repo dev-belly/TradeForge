@@ -139,6 +139,15 @@ against quantity that is about to be pulled would double-count.
 The slice that would land exactly on `end_ns` is deliberately not emitted: the
 sweep covers that quantity, and emitting both would count it twice.
 
+Cancellation includes children still in flight to the venue, not only accepted
+orders resting in the book. Their scheduled arrival callbacks become no-ops,
+and they release the policy's working quantity and the open-order guard's
+capacity before a replacement sweep is submitted. Otherwise a delayed child
+and its replacement could both fill, exceeding the parent's requested size.
+The explicit `leave` mode keeps those orders alive. An arrival due exactly at
+the deadline is processed before the closing decision; a new terminal sweep
+still uses the configured arrival latency.
+
 ## Guardrails
 
 Not a production risk system. They exist so an experiment cannot silently produce
