@@ -115,6 +115,13 @@ uses the same window, irrespective of the configured markout horizon.
 
 ### Closing the window
 
+A feed may skip the exact end timestamp. Before reading the first later tick,
+the replay driver advances the simulation clock to `parent.end_ns` and closes
+using the last state and book observed **within** the parent window. The later
+tick is available for markouts, not to price the terminal sweep. If no
+in-window state was ever observed, the run cannot establish a closing quote
+and does not fabricate a terminal sweep.
+
 When the clock reaches `parent.end_ns`, the simulator:
 
 1. cancels every working child order, so the policy sees an accurate remainder;
