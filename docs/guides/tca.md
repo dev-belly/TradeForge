@@ -40,16 +40,36 @@ be averaged, compared and bootstrapped without anyone flipping a sign by hand.
 
 ## Implementation shortfall
 
-Perold's definition, in `tca/metrics.py`:
+The arrival-price shortfall in `tca/metrics.py` includes explicit cash costs:
 
 ```
-IS_total = IS_filled * fill_ratio  +  opportunity_cost * (1 - fill_ratio)
+IS_price = price_cost_filled * fill_ratio + opportunity_cost * (1 - fill_ratio)
+IS_total = IS_price + 10000 * fees_total / requested_arrival_notional
 ```
 
 The filled leg is measured against the arrival price; the unfilled leg is charged
 at the end-of-window price. Both legs are weighted by their share of the
 **requested** quantity, so a strategy that fills 10% cheaply does not look good.
+Requested arrival notional is requested base quantity times arrival mid in ticks
+times the instrument tick size. Fees always increase cost for BUY and SELL;
+net rebates decrease it. They are not multiplied by the side's sign.
 If a required leg is unmeasurable, total shortfall is `None`, not zero.
+
+For 100 requested shares with a USD 100 arrival price, USD 5 in total fees
+contributes 5 bps whether 50 or 100 shares fill. If both fill and terminal prices
+are USD 100, price shortfall is zero and total shortfall is 5 bps. A USD 2 net
+rebate instead makes total shortfall -2 bps. These are arithmetic examples.
+
+`implementation_shortfall_bps` now includes fees; `price_shortfall_bps` retains
+the price-only filled and opportunity legs. The `cost_vs_*_bps` comparisons
+remain price-only. Regenerate old experiment and Parquet outputs before mixing
+them with current results: earlier shortfall values omitted fees. The report
+records the requested and filled arrival-notional bases in its provenance.
+
+This arrival-price convention measures the trade from receipt of the parent;
+it does not estimate an earlier portfolio manager decision or delay cost.
+[CFA Institute's trade cost overview](https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/trade-strategy-execution)
+explains shortfall as total actual-versus-paper cost.
 
 `opportunity_cost_bps` is the unfilled leg on its own. On a full fill it
 contributes nothing; on a partial fill it is often the dominant term, which is
@@ -66,7 +86,7 @@ is_filled_bps = spread_cost_bps + fees_bps + timing_bps + residual_impact_bps
 | Component | Meaning | Sign |
 |---|---|---|
 | `spread_cost_bps` | crossing the spread, signed against the mid before each fill | negative for maker fills, which earn it |
-| `fees_bps` | exchange fees + commission, net of maker rebates | negative when rebates exceed fees |
+| `fees_bps` | exchange fees + commission, net of maker rebates, per filled arrival notional | negative when rebates exceed fees |
 | `timing_bps` | how far the mid drifted between arrival and each fill | market drift, not a decision error |
 | `residual_impact_bps` | **unexplained** | see below |
 
@@ -77,6 +97,12 @@ SQL column. It absorbs two things:
    second-order approximation error;
 2. genuine market impact, which this platform **does not claim to identify**,
    because in a replay our orders never altered the tape.
+
+The filled-leg shortfall includes those same fees on the same arrival-notional
+basis. Adding a fee therefore raises filled and total shortfall without creating
+an equal negative residual. Fee ratios use exact rational arithmetic and convert
+to float only at the reporting boundary, so a caller's Decimal precision,
+rounding, exponent limits or traps cannot alter the attribution.
 
 `residual_share` is reported so a large unexplained share is visible rather than
 hidden behind four tidy columns. When it exceeds roughly 0.5, the decomposition

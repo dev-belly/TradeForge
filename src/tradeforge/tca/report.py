@@ -65,6 +65,7 @@ class TcaReport:
             "cost_vs_vwap_bps": self.metrics.cost_vs_vwap_bps,
             "cost_vs_twap_bps": self.metrics.cost_vs_twap_bps,
             "implementation_shortfall_bps": self.metrics.implementation_shortfall_bps,
+            "price_shortfall_bps": self.metrics.price_shortfall_bps,
             "maker_fill_ratio": self.metrics.maker_fill_ratio,
             "queue_mode": self.provenance.get("queue_mode"),
             "latency_basis": self.provenance.get("latency_basis"),
@@ -102,6 +103,8 @@ def build_tca_report(
     merged.setdefault("latency_basis", result.latency_basis)
     merged.setdefault("counterfactual_mode", result.counterfactual_mode)
     merged["markout_horizons_ns"] = list(markout_horizons_ns)
+    merged["shortfall_basis"] = "requested_arrival_notional_including_fees"
+    merged["attribution_basis"] = "filled_arrival_notional_including_fees"
 
     caveats = [APPROXIMATION_CAVEAT, MARKOUT_CAVEAT]
     if result.queue_mode.upper() != "EXACT":
