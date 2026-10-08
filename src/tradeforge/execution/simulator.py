@@ -244,9 +244,7 @@ class ExecutionSimulator:
         for order in self._policy.on_market_event(state):
             self.submit(order, decision_ns=state.timestamp_ns, snapshot=snapshot)
 
-    def close_at_deadline(
-        self, state: MarketState | None, snapshot: BookSnapshot | None
-    ) -> None:
+    def close_at_deadline(self, state: MarketState | None, snapshot: BookSnapshot | None) -> None:
         """Close with the last in-window quote, not the next event."""
         if self._window_closed:
             return
