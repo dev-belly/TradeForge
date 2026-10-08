@@ -152,9 +152,7 @@ def test_sparse_feed_closes_at_deadline_without_using_future_book(window_configs
         csv.writer(handle).writerows(rows)
 
     context = ExecutionHarness(window_configs).run(
-        RunRequest(
-            policy="twap", style="aggressive", quantity_base=100, n_slices=2, latency_ns=0
-        )
+        RunRequest(policy="twap", style="aggressive", quantity_base=100, n_slices=2, latency_ns=0)
     )
     result = context.result
     assert result is not None
