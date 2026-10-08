@@ -127,3 +127,37 @@ def test_post_window_data_reaches_markouts_without_changing_execution_metrics(wi
     assert result.terminal_mid_ticks == context.tca.benchmarks.terminal_mid_ticks == 10000.5
     assert context.tca.metrics.participation_rate == 0.5
     assert context.tca.markouts[0].n_measurable == 1
+
+
+def test_sparse_feed_closes_at_deadline_without_using_future_book(window_configs):
+    """A missing end tick must not shift the terminal sweep to the next tick."""
+    options = window_configs["market_data"]["source"]["options"]
+    session_start = options["start_time_ns"]
+    end_ns = session_start + 2_000_000_000
+    path = options["path"]
+
+    # Parent: [t+1s, t+2s]. The last in-window quote is at t+1s;
+    # the next quote arrives at t+3s. There is no event at t+2s.
+    window_configs["execution"]["parent_order"]["end_offset_ns"] = 1_000_000_000
+    window_configs["execution"]["policies"]["twap"]["end_of_window"] = "sweep_marketable"
+    with open(path, newline="") as handle:
+        rows = list(csv.reader(handle))
+    rows = [rows[0], *(row for row in rows[1:] if int(row[1]) != end_ns)]
+    with open(path, "w", newline="") as handle:
+        csv.writer(handle).writerows(rows)
+
+    context = ExecutionHarness(window_configs).run(
+        RunRequest(
+            policy="twap", style="aggressive", quantity_base=100, n_slices=2, latency_ns=0
+        )
+    )
+    result = context.result
+    assert result is not None
+    assert context.outcome.n_events == 5
+    assert context.validation is not None and context.validation.n_issues == 0
+    assert len(result.child_orders) == 1
+    assert result.child_orders[0].created_ns == end_ns
+    assert result.filled_base == 100
+    assert len(result.fills) == 1 and result.fills[0].timestamp_ns == end_ns
+    assert result.terminal_mid_ticks == 10000.5
+    assert result.metadata["last_observed_ns"] == session_start + 3_000_000_000
