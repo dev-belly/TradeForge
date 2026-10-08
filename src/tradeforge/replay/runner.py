@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
 from ..data.validation import EventValidator, ValidationReport
-from ..domain.book import MarketState
+from ..domain.book import BookSnapshot, MarketState
 from ..domain.enums import ValidationMode
 from ..domain.events import MarketEvent
 from ..domain.exceptions import EventValidationError
@@ -97,8 +97,20 @@ class ReplayRunner:
             stream = self._validator.validate(stream)
 
         last_state: MarketState | None = None
+        last_snapshot: BookSnapshot | None = None
         depth = self._settings.snapshot_depth
         for event in stream:
+            if (
+                event.exchange_timestamp_ns > simulator.parent.end_ns
+                and self._clock.now_ns < simulator.parent.end_ns
+            ):
+                # A sparse feed may skip the exact parent deadline. Close using
+                # the last in-window book BEFORE advancing to the next event,
+                # so later prices cannot drive the terminal sweep.
+                self._clock.advance_to(simulator.parent.end_ns)
+                self._drain()
+                simulator.close_at_deadline(last_state, last_snapshot)
+                self._drain()
             self._advance(event)
             self._drain()
             if simulator.is_finished and self._past_stop(event.exchange_timestamp_ns):
@@ -118,6 +130,7 @@ class ReplayRunner:
                 observer.observe(event, state)
 
             last_state = state
+            last_snapshot = snapshot
             self.outcome.n_events += 1
             if self.outcome.first_timestamp_ns is None:
                 self.outcome.first_timestamp_ns = event.exchange_timestamp_ns

@@ -93,6 +93,35 @@ modelled** — the pull happens at the decision instant.
 
 ## End of window
 
+### Warm-up before a delayed start
+
+`parent_order.start_offset_ns` delays the parent window relative to the source's
+`start_time_ns`. Earlier events still replay in timestamp order to reconstruct
+the book and causal rolling features. They do not submit child orders, establish
+the arrival benchmark or contribute to execution-window traded volume.
+
+Before sending a market state to a policy, the simulator subtracts cumulative
+volume observed strictly before `parent.start_ns`. Thus POV and participation
+guards use only volume since the parent window opened; events exactly at the
+start are included. The arrival price is the first observable two-sided mid
+inside the window. If the stream ends before the start, there are no orders,
+fills or measured arrival/terminal prices. An out-of-order stream remains an
+error; warm-up does not disable the validator or the monotonic replay clock.
+
+Post-window events still reach the market observer for markouts, but they do not
+increase execution-window volume or overwrite the result's arrival/terminal
+benchmarks. Participation in both the execution result and TCA report therefore
+uses the same window, irrespective of the configured markout horizon.
+
+### Closing the window
+
+A feed may skip the exact end timestamp. Before reading the first later tick,
+the replay driver advances the simulation clock to `parent.end_ns` and closes
+using the last state and book observed **within** the parent window. The later
+tick is available for markouts, not to price the terminal sweep. If no
+in-window state was ever observed, the run cannot establish a closing quote
+and does not fabricate a terminal sweep.
+
 When the clock reaches `parent.end_ns`, the simulator:
 
 1. cancels every working child order, so the policy sees an accurate remainder;
