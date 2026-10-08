@@ -25,7 +25,6 @@ import contextlib
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from functools import partial
-from typing import Protocol
 
 from ..domain.book import BookSnapshot, MarketState
 from ..domain.enums import (
@@ -48,16 +47,8 @@ from ..matching.engine import match_order, resting_price_ticks
 from .guards import Guardrails
 from .oms import Oms
 from .policies.base import ExecutionPolicyBase
-from .ports import FeeModelLike
+from .ports import FeeModelLike, SupportsLevelSize
 from .result import ExecutionResult
-
-
-class SupportsLevelSize(Protocol):
-    """The book query the simulator needs before an event mutates a level."""
-
-    def level_size_base(self, side: Side, price_ticks: int) -> int: ...
-
-    def snapshot(self, depth: int | None = None) -> BookSnapshot: ...
 
 
 @dataclass(frozen=True)
@@ -70,9 +61,7 @@ class SimulatorSettings:
     adaptive_min_spread_ticks: int = 2
     counterfactual_mode: str = "replay_approximation"
     cancel_working_at_end: bool = True
-    # Cancel/repost horizon for resting passive orders. 0 disables it.
-    # The cancel is applied at the decision instant: cancel latency is not
-    # modelled (see docs/design-review.md, known limitations).
+    # Cancel/repost after this timeout (0 disables); cancel latency is not modelled.
     passive_timeout_ns: int = 0
     # A CLEAR (followed by SNAPSHOT) makes level contents unknowable: our queue
     # position cannot be tracked across it, so passive orders are pulled.
@@ -256,33 +245,17 @@ class ExecutionSimulator:
             self.submit(order, decision_ns=state.timestamp_ns, snapshot=snapshot)
 
     def close_at_deadline(
-        self, last_state: MarketState | None, last_snapshot: BookSnapshot | None
+        self, state: MarketState | None, snapshot: BookSnapshot | None
     ) -> None:
-        """Close at the actual deadline, never with a later market observation.
-
-        A market feed need not contain an event exactly at parent.end_ns. The
-        replay driver advances the clock to that deadline before consuming its
-        first later event, and supplies the last in-window market state. This
-        lets end-of-window policies decide with information already observed.
-        """
+        """Close with the last in-window quote, not the next event."""
         if self._window_closed:
             return
-        if (
-            last_state is None
-            or last_snapshot is None
-            or last_state.timestamp_ns < self._parent.start_ns
-        ):
-            # No observable in-window state: never invent an arrival benchmark
-            # or sweep with a book assembled solely before the parent opened.
+        if not state or not snapshot or state.timestamp_ns < self._parent.start_ns:
             self._window_closed = True
             return
-        deadline_state = replace(last_state, timestamp_ns=self._parent.end_ns)
-        last_observed_ns = self._last_state_ns
-        try:
-            self.observe_state(deadline_state, last_snapshot)
-        finally:
-            # The deadline is an internal timer, not a new market observation.
-            self._last_state_ns = last_observed_ns
+        seen_ns = self._last_state_ns
+        self.observe_state(replace(state, timestamp_ns=self._parent.end_ns), snapshot)
+        self._last_state_ns = seen_ns
 
     def _expire_stale_passive(self, at_ns: int) -> None:
         """Cancel/repost: a passive order resting past the horizon is pulled.
