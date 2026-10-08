@@ -5,7 +5,16 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Protocol
 
-from ..domain.enums import LiquidityFlag
+from ..domain.book import BookSnapshot
+from ..domain.enums import LiquidityFlag, Side
+
+
+class SupportsLevelSize(Protocol):
+    """The only book operations needed by the execution simulator."""
+
+    def level_size_base(self, side: Side, price_ticks: int) -> int: ...
+
+    def snapshot(self, depth: int | None = None) -> BookSnapshot: ...
 
 
 class FeeModelLike(Protocol):
