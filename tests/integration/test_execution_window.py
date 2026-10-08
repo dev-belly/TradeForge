@@ -146,6 +146,8 @@ def test_sparse_feed_closes_at_deadline_without_using_future_book(window_configs
     with open(path, newline="") as handle:
         rows = list(csv.reader(handle))
     rows = [rows[0], *(row for row in rows[1:] if int(row[1]) != end_ns)]
+    for sequence, row in enumerate(rows[1:]):
+        row[0] = str(sequence)
     with open(path, "w", newline="") as handle:
         csv.writer(handle).writerows(rows)
 
