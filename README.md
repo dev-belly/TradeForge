@@ -35,14 +35,14 @@ SYNTHETIC DATA - deterministic generator, not a real venue.
 
 policy       style       fill     maker   vs_arrival_bps  vs_vwap_bps  is_bps   participation
 -----------  ----------  -------  ------  --------------  -----------  -------  -------------
-twap         passive     100.00%  96.3%   -7.9369         -0.8977      -7.9369  1.888%
-twap         aggressive  100.00%  5.1%    -6.9336         0.1063       -6.9336  1.888%
-vwap         passive     100.00%  96.3%   -7.9001         -0.8608      -7.9001  1.888%
-vwap         aggressive  100.00%  5.3%    -6.8957         0.1442       -6.8957  1.888%
-pov          passive     100.00%  100.0%  -5.0705         1.9707       -5.0705  1.888%
-pov          aggressive  100.00%  3.4%    -3.3543         3.6881       -3.3543  1.888%
-is_baseline  passive     100.00%  97.4%   -7.1082         -0.0685      -7.1082  1.888%
-is_baseline  aggressive  100.00%  4.8%    -6.1079         0.9325       -6.1079  1.888%
+twap         passive     100.00%  96.3%   -7.9369         -0.8977      -7.9369  2.198%
+twap         aggressive  100.00%  5.1%    -6.9336         0.1063       -6.9336  2.198%
+vwap         passive     100.00%  96.3%   -7.9001         -0.8608      -7.9001  2.198%
+vwap         aggressive  100.00%  5.3%    -6.8957         0.1442       -6.8957  2.198%
+pov          passive     100.00%  100.0%  -5.0705         1.9707       -5.0705  2.198%
+pov          aggressive  100.00%  3.4%    -3.3543         3.6881       -3.3543  2.198%
+is_baseline  passive     100.00%  97.4%   -7.1082         -0.0685      -7.1082  2.198%
+is_baseline  aggressive  100.00%  4.8%    -6.1079         0.9325       -6.1079  2.198%
 ```
 
 **Read the first two cost columns together.** Passive TWAP beats both benchmarks;
@@ -51,6 +51,9 @@ execution has a 7.04 bps gap between those two cost measures, reflecting the
 market move between arrival and the volume-weighted price during the order window.
 The platform ships with `sql/02_benchmark_disagreement.sql` and presents both
 cost columns together.
+
+Participation divides filled quantity by market volume observed inside the parent
+execution window. Warm-up and later markout events do not enter that denominator.
 
 ## Tech stack
 
