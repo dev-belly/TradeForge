@@ -276,11 +276,9 @@ class ExecutionSimulator:
             self._n_cancels += 1
 
     def _close_window(self, state: MarketState, snapshot: BookSnapshot) -> None:
-        """End of the parent window: pull working orders, then sweep.
+        """Cancel resting and in-flight children before computing the sweep.
 
-        Order matters. Working orders are cancelled FIRST so the policy sees an
-        accurate remainder; otherwise the sweep would be computed against
-        quantity that is about to be pulled and would double-count it.
+        The policy must see the released quantity before deciding its remainder.
         """
         self._window_closed = True
         if self._policy.end_of_window != "leave":
@@ -311,7 +309,7 @@ class ExecutionSimulator:
         allowed = self._guards.check_new_order(
             order,
             spec=self._spec,
-            open_orders=self._oms.n_open_orders + self._clock.pending,
+            open_orders=sum(not child.is_terminal for child in self._submitted) - 1,
             inventory_base=self._oms.inventory_base,
         )
         if not allowed.allowed:
@@ -343,6 +341,8 @@ class ExecutionSimulator:
     # -------------------------------------------------------------- arrival
 
     def _arrive(self, order: ChildOrder, arrival_ns: int) -> None:
+        if order.is_terminal:
+            return
         snapshot = self._book.snapshot(self._settings.snapshot_depth)
         if order.style is PlacementStyle.AGGRESSIVE or (
             order.style is PlacementStyle.ADAPTIVE and order.price_ticks is not None
@@ -534,7 +534,7 @@ class ExecutionSimulator:
     # ------------------------------------------------------------ finalizing
 
     def _cancel_all(self, at_ns: int, *, reason: str) -> None:
-        for order in tuple(self._oms.open_orders):
+        for order in tuple(child for child in self._submitted if not child.is_terminal):
             self._release(order)
             report = self._oms.cancel(order, at_ns=at_ns, reason=reason)
             self._record(report)
