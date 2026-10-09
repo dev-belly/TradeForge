@@ -9,11 +9,8 @@ A documented command that no longer exists is worse than no documentation: it
 costs the reader the time to discover the docs are wrong before they can start
 looking for the real answer. The checks here are cheap and catch exactly that.
 
-**What is not checked.** The prose, the numbers in the tables, and the Python
-snippets in the guides are not executed. Verifying every snippet would mean
-maintaining a doctest harness for code that is deliberately illustrative; the
-`make demo` table is checked because it is the repository's headline claim and
-because it is cheap to check.
+The quoted demo tables and getting-started report are checked against the
+public CLI. Prose and illustrative Python snippets are not executed.
 """
 
 from __future__ import annotations
@@ -30,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = sorted((ROOT / "examples").glob("*.py"))
 GUIDES = sorted((ROOT / "docs/guides").glob("*.md"))
 DOCS = [ROOT / "README.md", *GUIDES]
+GETTING_STARTED = ROOT / "docs/guides/getting-started.md"
 
 #: Prose that happens to contain the word "make", not a target reference.
 _PROSE = {"the", "a", "it", "them", "sure", "this", "that", "no"}
@@ -49,6 +47,53 @@ def code_spans(path: Path) -> list[str]:
 def makefile_targets() -> set[str]:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     return set(re.findall(r"^([a-z][a-z0-9-]*):", makefile, re.M))
+
+
+def quoted_block(path: Path, header: str) -> str:
+    blocks = [block for block in code_spans(path) if block.startswith("```")]
+    pattern = rf"(?<!\w){re.escape(header)}(?!\w)"
+    matches = [block.strip("`\n") for block in blocks if re.search(pattern, block)]
+    assert len(matches) == 1, f"{path.name}: expected one table containing {header!r}"
+    return matches[0]
+
+
+def demo_rows(text: str) -> dict[tuple[str, str], dict[str, str]]:
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("policy "))
+    columns = lines[start].split()
+    rows = {}
+    for line in lines[start + 2 :]:
+        cells = line.split()
+        if not cells:
+            break
+        assert len(cells) == len(columns), f"malformed demo row: {line!r}"
+        key = tuple(cells[:2])
+        assert key not in rows, f"duplicate demo row: {key}"
+        rows[key] = dict(zip(columns[2:], cells[2:], strict=True))
+    assert rows, "demo table has no rows"
+    return rows
+
+
+@pytest.fixture(scope="module")
+def cli_runs() -> dict[str, str]:
+    """Exercise the documented commands once, including their rendered columns."""
+    outputs = {}
+    for name, args in {
+        "demo": ["demo"],
+        "run": ["run", "--policy", "twap", "--style", "passive"],
+    }.items():
+        result = subprocess.run(
+            [sys.executable, "-m", "tradeforge.interfaces.cli", *args],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            env={"PYTHONPATH": str(ROOT / "src"), "PATH": "/usr/bin:/bin"},
+            timeout=240,
+            check=False,
+        )
+        assert result.returncode == 0, f"{name} failed:\n{result.stderr[-1500:]}"
+        outputs[name] = result.stdout
+    return outputs
 
 
 @pytest.fixture(scope="module")
@@ -176,45 +221,53 @@ class TestDocumentedCommands:
 class TestTheHeadlineClaim:
     """`getting-started.md` quotes the `make demo` table as the repository's point.
 
-    The guide's argument is that every strategy is about 7 bps cheaper than the
-    arrival price and about 3 bps more expensive than the interval VWAP, and that
-    both are correct because the market drifted. That argument rests on the
-    numbers, so a drift in the generator would make the guide misleading rather
-    than merely stale.
+    The aggressive TWAP benchmark comparison changes sign because the market
+    drifted. Price-only columns, fee-inclusive shortfall and participation must
+    all match the actual output; checking only frozen price numbers missed stale
+    cash-cost columns and the guide's attribution table.
     """
 
-    @staticmethod
-    def _demo_rows() -> dict[tuple[str, str], dict[str, float]]:
-        from tradeforge.application.harness import ExecutionHarness, RunRequest
-        from tradeforge.infrastructure.config import load_configs, validate_required
-
-        configs = load_configs(ROOT / "configs")
-        validate_required(configs)
-        harness = ExecutionHarness(configs)
-        rows = {}
-        for policy in ("twap", "vwap", "pov", "is_baseline"):
-            for style in ("passive", "aggressive"):
-                context = harness.run(RunRequest(policy=policy, style=style, seed=20260908))
-                assert context.tca is not None
-                metrics = context.tca.metrics
-                rows[(policy, style)] = {
-                    "fill_ratio": metrics.fill_ratio,
-                    "maker_fill_ratio": metrics.maker_fill_ratio,
-                    "vs_arrival_bps": metrics.cost_vs_arrival_bps,
-                }
-        return rows
-
-    def test_the_quoted_numbers_still_hold(self):
-        rows = self._demo_rows()
+    def test_the_quoted_numbers_still_hold(self, cli_runs):
+        rows = demo_rows(cli_runs["demo"])
         quoted = {
             ("twap", "passive"): (1.0, 0.963, -7.9369),
             ("twap", "aggressive"): (1.0, 0.051, -6.9336),
         }
-        for key, (fill, maker, is_bps) in quoted.items():
+        for key, (fill, maker, arrival_bps) in quoted.items():
             row = rows[key]
-            assert row["fill_ratio"] == pytest.approx(fill, abs=5e-4), key
-            assert row["maker_fill_ratio"] == pytest.approx(maker, abs=5e-4), key
-            assert row["vs_arrival_bps"] == pytest.approx(is_bps, abs=5e-4), key
+            assert float(row["fill"].rstrip("%")) / 100 == pytest.approx(fill, abs=5e-4), key
+            assert float(row["maker"].rstrip("%")) / 100 == pytest.approx(maker, abs=5e-4), key
+            assert float(row["vs_arrival_bps"]) == pytest.approx(arrival_bps, abs=5e-4), key
+
+    @pytest.mark.parametrize("doc,n_rows", [(ROOT / "README.md", 8), (GETTING_STARTED, 2)])
+    def test_documented_demo_columns_match_the_cli(self, cli_runs, doc, n_rows):
+        actual = demo_rows(cli_runs["demo"])
+        quoted = demo_rows(quoted_block(doc, "vs_arrival_bps"))
+        assert len(actual) == 8
+        assert list(quoted) == list(actual)[:n_rows], doc.name
+        expected_columns = set(next(iter(actual.values())))
+        if n_rows == 2:
+            expected_columns.remove("participation")
+        for key, row in quoted.items():
+            assert set(row) == expected_columns, (doc.name, key)
+            for column, value in row.items():
+                assert float(value.rstrip("%")) == pytest.approx(
+                    float(actual[key][column].rstrip("%")), abs=5e-5
+                ), (doc.name, key, column)
+
+    def test_documented_report_matches_the_cli(self, cli_runs):
+        quoted = quoted_block(GETTING_STARTED, "Cost attribution (bps, positive = worse)")
+        actual = cli_runs["run"].split("\nProvenance\n", 1)[0]
+
+        def normalized_lines(text):
+            return [
+                " ".join(line.split())
+                for line in text.splitlines()
+                if line.strip() and not re.fullmatch(r"[-\s]+", line)
+            ]
+
+        # Padding is presentation; row names, values and their order are the contract.
+        assert normalized_lines(quoted) == normalized_lines(actual)
 
     def test_the_guide_calls_its_table_an_excerpt(self):
         """The guide shows two of eight rows and omits the participation column.
