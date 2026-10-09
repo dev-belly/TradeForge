@@ -73,39 +73,41 @@ python -m tradeforge.interfaces.cli run --policy twap --style passive
 ```
 
 ```
-metric                          value
-------------------------------  -----------------------------
-policy                          twap
-side                            BUY
-fill_ratio                      1
-participation_rate              0.02198
-cost_vs_arrival_bps             -7.9369
-cost_vs_vwap_bps                -0.8977
-implementation_shortfall_bps    -8.0246
-price_shortfall_bps             -7.9369
-maker_fill_ratio                0.9634
-queue_mode                      APPROXIMATE
-latency_basis                   scenario
-counterfactual_mode             replay_approximation
+metric                        value
+----------------------------  --------------------
+cost_vs_arrival_bps           -7.9369
+cost_vs_twap_bps              -0.8667
+cost_vs_vwap_bps              -0.8977
+counterfactual_mode           replay_approximation
+fill_ratio                    1
+implementation_shortfall_bps  -8.0246
+latency_basis                 scenario
+maker_fill_ratio              0.9634
+participation_rate            0.022
+policy                        twap
+price_shortfall_bps           -7.9369
+queue_mode                    APPROXIMATE
+side                          BUY
 
 Benchmarks (ticks)
-benchmark        value    basis
----------------  -------  ----------------------------------
-arrival_mid      10000    first mid at/after window start
-interval_vwap    9992.96  volume weighted over 8417 prints
-interval_twap    9992.93  time weighted mid, trapezoidal
-terminal_mid     9976.5   last mid inside the window
+benchmark      value      basis
+-------------  ---------  -------------------------------
+arrival_mid    10000      first mid at/after window start
+interval_vwap  9992.9602  8417 prints
+interval_twap  9992.9292  time weighted mid
+interval_mid   9992.9867  unweighted mean of mids
+terminal_mid   9976.5     last mid inside the window
 
 Cost attribution (bps, positive = worse)
-component                bps
------------------------  ---------
-is_filled                -7.9369
-spread_cost              -0.479944
-fees                     -0.0877492
-timing                   -7.45728
-residual (unexplained)   0.0880677
-opportunity_cost         -23.5
-is_total                 -7.9369
+component               bps
+----------------------  -------
+is_filled               -8.0246
+spread_cost             -0.4799
+fees                    -0.0877
+timing                  -7.4573
+residual (unexplained)  0.0003
+opportunity_cost        -23.5
+is_total                -8.0246
 
 Markouts (bps, positive = adverse)
 horizon_s  measurable  of_fills  volume_weighted  median
@@ -121,8 +123,9 @@ Four things worth noticing:
 1. `queue_mode` is `APPROXIMATE`. On L2 data the queue position is not
    observable, so the number is an estimate. The report says so at the top, not
    in a footnote.
-2. The attribution closes exactly: `is_filled` equals the sum of the four
-   components. `residual` is labelled *unexplained* and is small here (0.09 bps).
+2. Before display rounding, `is_filled` equals the sum of the four components,
+   including fees. `residual` is labelled *unexplained* and is small here
+   (0.0003 bps).
    When it is large the report says the decomposition is not describing the
    execution.
 3. `opportunity_cost` is −23.5 bps and contributes nothing, because the fill
