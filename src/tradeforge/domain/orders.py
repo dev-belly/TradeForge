@@ -108,11 +108,14 @@ class Order:
                 f"fill {quantity_base} exceeds remaining {self.remaining_base} "
                 f"for order {self.client_order_id}"
             )
-        self.filled_base += quantity_base
-        if self.filled_base == self.quantity_base:
+        filled_after = self.filled_base + quantity_base
+        # Validate the state transition before committing any fill quantity.
+        # A rejected fill on a new or terminal order must leave it unchanged.
+        if filled_after == self.quantity_base:
             self.transition_to(OrderStatus.FILLED, at_ns=at_ns)
         else:
             self.transition_to(OrderStatus.PARTIALLY_FILLED, at_ns=at_ns)
+        self.filled_base = filled_after
 
 
 @dataclass(slots=True)
