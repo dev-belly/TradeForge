@@ -154,7 +154,7 @@ class TestSignConventions:
 
 
 class TestOrderStateMachine:
-    def _order(self) -> ChildOrder:
+    def _order(self, status=OrderStatus.NEW) -> ChildOrder:
         return ChildOrder(
             order_id=1,
             client_order_id="c1",
@@ -164,6 +164,7 @@ class TestOrderStateMachine:
             quantity_base=100,
             time_in_force=TimeInForce.DAY,
             created_ns=0,
+            status=status,
         )
 
     def test_new_can_be_accepted_or_rejected(self):
@@ -199,6 +200,18 @@ class TestOrderStateMachine:
         order.transition_to(OrderStatus.ACCEPTED, at_ns=1)
         with pytest.raises(OrderStateError):
             order.apply_fill(101, at_ns=2)
+
+    @pytest.mark.parametrize(
+        "status",
+        [OrderStatus.NEW, OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.EXPIRED],
+    )
+    @pytest.mark.parametrize("quantity", [40, 100])
+    def test_rejected_fill_does_not_mutate_order(self, status, quantity):
+        order = self._order(status)
+        before = (order.filled_base, order.status, order.working_ns, order.terminal_ns)
+        with pytest.raises(OrderStateError, match="illegal order transition"):
+            order.apply_fill(quantity, at_ns=2)
+        assert (order.filled_base, order.status, order.working_ns, order.terminal_ns) == before
 
     def test_non_positive_fill_is_rejected(self):
         order = self._order()
