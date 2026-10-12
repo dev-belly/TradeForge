@@ -10,6 +10,11 @@ useful message is part of the contract, not an implementation detail.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("fastapi", reason="the API needs fastapi")
@@ -18,6 +23,7 @@ pytest.importorskip("httpx", reason="TestClient needs httpx")
 from fastapi.testclient import TestClient
 
 from tradeforge.interfaces.api import app
+from tradeforge.interfaces.reports import HtmlReportBuilder
 
 
 @pytest.fixture(scope="module")
@@ -136,6 +142,111 @@ class TestExecutionEndpoint:
     def test_a_non_positive_quantity_is_rejected(self, client):
         response = client.post("/executions", json={"quantity_base": -5})
         assert response.status_code == 422
+
+
+@pytest.fixture
+def report_root(tmp_path, monkeypatch) -> Path:
+    root = tmp_path / "reports"
+    root.mkdir()
+    monkeypatch.setattr(app.state, "report_root", root.resolve())
+    return root
+
+
+class TestReportScope:
+    def test_report_root_is_selected_by_server_startup_configuration(self, tmp_path):
+        configured_root = tmp_path / "operator-reports"
+        rendered = HtmlReportBuilder(configured_root).index([])
+        code = (
+            "import sys; "
+            "from fastapi.testclient import TestClient; "
+            "from tradeforge.interfaces.api import app; "
+            "response = TestClient(app).get('/reports/index.html'); "
+            "assert response.status_code == 200; "
+            "sys.stdout.buffer.write(response.content)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env={**os.environ, "TRADEFORGE_REPORT_ROOT": str(configured_root)},
+            check=True,
+            capture_output=True,
+        )
+        assert result.stdout.decode("utf-8") == rendered.path.read_text(encoding="utf-8")
+
+    def test_serves_a_generated_report_from_the_configured_root(self, client, report_root):
+        rendered = HtmlReportBuilder(report_root).index([])
+        response = client.get(f"/reports/{rendered.path.name}")
+        assert response.status_code == 200
+        assert response.text == rendered.path.read_text(encoding="utf-8")
+        assert response.headers["content-type"].startswith("text/html")
+
+    def test_serves_relative_subdirectories(self, client, report_root):
+        rendered = HtmlReportBuilder(report_root / "research" / "baseline").index([])
+        response = client.get("/reports/index.html", params={"directory": "research/baseline"})
+        assert response.status_code == 200
+        assert response.text == rendered.path.read_text(encoding="utf-8")
+
+    def test_caller_cannot_select_an_arbitrary_readable_directory(
+        self, client, report_root, tmp_path
+    ):
+        private = tmp_path / "private"
+        private.mkdir()
+        (private / "secret.html").write_text("private document", encoding="utf-8")
+        response = client.get("/reports/secret.html", params={"directory": str(private)})
+        assert response.status_code == 400
+        assert "private document" not in response.text
+
+    @pytest.mark.parametrize(
+        "directory",
+        [
+            "../private",
+            "research/../../private",
+            r"..\private",
+            "/private",
+            r"\private",
+            r"C:\private",
+            "C:private",
+            r"\\server\share",
+            "research:stream",
+            "research\x00",
+        ],
+    )
+    def test_rejects_traversal_and_absolute_paths_on_either_platform(
+        self, client, report_root, directory
+    ):
+        response = client.get("/reports/index.html", params={"directory": directory})
+        assert response.status_code == 400
+
+    @pytest.mark.parametrize("name", [r"..\private\secret.html", "index.html:stream"])
+    def test_report_name_cannot_contain_path_components(self, client, report_root, name):
+        response = client.get(f"/reports/{name}")
+        assert response.status_code == 400
+
+    @pytest.mark.parametrize("directory_link", [False, True])
+    def test_symlinks_cannot_escape_the_configured_root(
+        self, client, report_root, tmp_path, directory_link
+    ):
+        private = tmp_path / "private"
+        private.mkdir()
+        (private / "secret.html").write_text("private document", encoding="utf-8")
+        target = private if directory_link else private / "secret.html"
+        link = report_root / ("linked" if directory_link else "secret.html")
+        try:
+            link.symlink_to(target, target_is_directory=directory_link)
+        except OSError as error:
+            if os.name == "nt" and error.winerror == 1314:
+                pytest.skip("Windows does not allow this user to create symlinks")
+            raise
+        response = client.get(
+            "/reports/secret.html", params={"directory": "linked" if directory_link else ""}
+        )
+        assert response.status_code == 400
+        assert "private document" not in response.text
+
+    def test_non_html_files_are_not_served(self, client, report_root):
+        (report_root / "notes.txt").write_text("internal notes", encoding="utf-8")
+        response = client.get("/reports/notes.txt")
+        assert response.status_code == 404
+        assert "internal notes" not in response.text
 
 
 class TestOpenApi:

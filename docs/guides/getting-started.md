@@ -43,6 +43,22 @@ make report        # self-contained HTML reports in artifacts/reports/
 make db-query NAME=02_benchmark_disagreement
 ```
 
+The local HTTP API serves those generated HTML files with
+`GET /reports/index.html`. Its server-owned report root defaults to
+`artifacts/reports`; set `TRADEFORGE_REPORT_ROOT` before starting `make api`
+if the reports were generated into another directory. For example:
+
+```bash
+TRADEFORGE_REPORT_ROOT=/srv/tradeforge/reports make api
+```
+
+The optional `directory` query parameter selects a **relative subdirectory**
+within that configured root, for example
+`/reports/index.html?directory=research/baseline`. It no longer selects an
+arbitrary filesystem directory. Absolute paths, parent traversal and symlinks
+that resolve outside the configured root are rejected. Only `.html` reports
+are served; the server operator should keep other data outside that root.
+
 `make demo` prints all four algorithms in both styles. The first two rows, with
 the `participation` column dropped for width:
 
