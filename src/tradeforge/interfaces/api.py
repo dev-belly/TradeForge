@@ -17,7 +17,8 @@ Start it with `make api`.
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -34,6 +35,7 @@ from ..storage import DuckDbStore
 
 DEFAULT_ARTIFACT_ROOT = Path("artifacts/runs")
 DEFAULT_SQL_DIR = Path("sql")
+DEFAULT_REPORT_ROOT = Path("artifacts/reports")
 
 app = FastAPI(
     title="TradeForge",
@@ -43,6 +45,10 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+# The server selects this root at startup; request parameters cannot change it.
+app.state.report_root = Path(
+    os.environ.get("TRADEFORGE_REPORT_ROOT", str(DEFAULT_REPORT_ROOT))
+).resolve()
 
 
 class RunRequestBody(BaseModel):
@@ -211,19 +217,45 @@ def run_query(name: str) -> dict[str, Any]:
 
 @app.get("/reports/{name}", response_class=HTMLResponse)
 def get_report(
-    name: str, directory: Path = Query(default=Path("artifacts/reports"))
+    name: str,
+    directory: str = Query(
+        default="", description="Relative subdirectory of the server report root"
+    ),
 ) -> HTMLResponse:
-    """Serve a generated HTML report by filename."""
-    candidate = (directory / name).resolve()
-    root = directory.resolve()
-    if root not in candidate.parents and candidate != root:
-        raise HTTPException(status_code=400, detail="path escapes the report directory")
+    """Serve a generated HTML report within the server-configured output root."""
+    relative_directory = _report_subdirectory(directory)
+    if name in {".", ".."} or any(character in name for character in ("/", "\\", ":", "\x00")):
+        raise HTTPException(status_code=400, detail="report name must be a filename")
+    if Path(name).suffix.lower() != ".html":
+        raise HTTPException(status_code=404, detail=f"no report named {name!r}")
+    root = Path(app.state.report_root)
+    try:
+        candidate = (root / relative_directory / name).resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="invalid report path") from exc
+    if not candidate.is_relative_to(root):
+        raise HTTPException(status_code=400, detail="path escapes the server report root")
     if not candidate.is_file():
         raise HTTPException(status_code=404, detail=f"no report named {name!r}")
     return HTMLResponse(candidate.read_text(encoding="utf-8"))
 
 
 # ------------------------------------------------------------------ helpers
+
+
+def _report_subdirectory(directory: str) -> Path:
+    """Accept only relative components, including when Windows syntax reaches Linux."""
+    normalized = directory.replace("\\", "/")
+    path = PurePosixPath(normalized)
+    if (
+        path.is_absolute()
+        or PureWindowsPath(directory).drive
+        or ".." in path.parts
+        or ":" in normalized
+        or "\x00" in normalized
+    ):
+        raise HTTPException(status_code=400, detail="directory must be relative to the report root")
+    return Path(*path.parts)
 
 
 def _configs() -> dict[str, Any]:
