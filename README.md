@@ -1,5 +1,10 @@
 # TradeForge
 
+[Real public-market matching case](docs/PUBLIC_MARKET_CASE.md): a saved,
+sequence-checked DOGEUSDT L2 episode, offline aggressive matching, and all 18 fee /
+latency scenarios. This focused case complements the synthetic OMS/queue research;
+fees and order latencies remain declared assumptions.
+
 [![CI](https://github.com/dev-belly/TradeForge/actions/workflows/ci.yml/badge.svg)](https://github.com/dev-belly/TradeForge/actions/workflows/ci.yml)
 
 An event-driven market-microstructure and algorithmic-execution research platform:

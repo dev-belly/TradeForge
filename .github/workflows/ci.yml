@@ -46,6 +46,8 @@ jobs:
         run: python -m tradeforge.interfaces.cli doctor
       - name: Demo smoke
         run: python -m tradeforge.interfaces.cli demo
+      - name: Replay the saved public-market matching case without network access
+        run: python tools/replay_public_depth.py data/examples/public-depth-20261013.json.gz --out artifacts/public-depth-ci
 
   cpp:
     name: C++ core (Release, unit tests, differential)
