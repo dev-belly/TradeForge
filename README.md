@@ -236,9 +236,17 @@ tests/             unit · integration · property · leakage · architecture ·
 
 ## Data
 
-**Everything bundled is SYNTHETIC.** The generator is deterministic, requires no
-network, and every artefact it produces carries
+**The default demo and generated research artefacts are SYNTHETIC.** The
+deterministic generator requires no network, and every artefact it produces carries
 `provenance: "SYNTHETIC - deterministic generator, NOT real market data"`.
+
+**One separate frozen public-market example is bundled:**
+[`data/examples/public-depth-20261013.json.gz`](data/examples/public-depth-20261013.json.gz)
+contains a short public DOGEUSDT L2 quote capture. Its [offline matching case](docs/PUBLIC_MARKET_CASE.md)
+has 18 reproducible scenario rows. The observed quotes are real; fills, account
+fees and latency assumptions are **simulated**, and the case does not validate
+passive queues, routing or live trading performance. Do not combine these claims
+with the synthetic execution benchmark above.
 
 Real sources are supported through adapters, and the capability tier each one
 declares is enforced rather than assumed:
