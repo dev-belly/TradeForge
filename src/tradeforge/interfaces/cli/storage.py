@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from ...infrastructure.resources import default_resource_dir
 from ...storage import DuckDbStore
 from ..console import render_mapping
 from .shared import fail, first_question
@@ -22,20 +23,21 @@ DEFAULT_SQL_DIR = Path("sql")
 @db_app.command("init")
 def db_init(root: Annotated[Path, typer.Option("--root")] = DEFAULT_ROOT) -> None:
     """Create the Parquet directory layout and verify the schema compiles."""
-    store = DuckDbStore(root, sql_dir=DEFAULT_SQL_DIR)
+    store = DuckDbStore(root, sql_dir=default_resource_dir("sql"))
     store.ensure_created()
     typer.echo(render_mapping(store.status().to_dict()))
 
 
 @db_app.command("list")
 def db_list(
-    sql_dir: Annotated[Path, typer.Option("--sql-dir")] = DEFAULT_SQL_DIR,
+    sql_dir: Annotated[Path | None, typer.Option("--sql-dir")] = None,
 ) -> None:
     """List the packaged analytical queries."""
-    store = DuckDbStore(DEFAULT_ROOT, sql_dir=sql_dir)
+    directory = default_resource_dir("sql") if sql_dir is None else sql_dir
+    store = DuckDbStore(DEFAULT_ROOT, sql_dir=directory)
     queries = store.available_queries()
     if not queries:
-        fail(f"no .sql files found in {sql_dir}")
+        fail(f"no .sql files found in {directory}")
         return
     for name, path in sorted(queries.items()):
         typer.echo(f"{name}\n  {first_question(path)}\n  {path}")
@@ -45,7 +47,7 @@ def db_list(
 def db_query(
     name: Annotated[str, typer.Argument(help="Query name, with or without .sql")],
     root: Annotated[Path, typer.Option("--root")] = DEFAULT_ROOT,
-    sql_dir: Annotated[Path, typer.Option("--sql-dir")] = DEFAULT_SQL_DIR,
+    sql_dir: Annotated[Path | None, typer.Option("--sql-dir")] = None,
 ) -> None:
     """Run one packaged query and print the result.
 
@@ -54,7 +56,8 @@ def db_query(
     table is expected to be absent until something writes it, and the useful
     thing to say is which command writes it.
     """
-    store = DuckDbStore(root, sql_dir=sql_dir)
+    directory = default_resource_dir("sql") if sql_dir is None else sql_dir
+    store = DuckDbStore(root, sql_dir=directory)
     status = store.status()
     if not status.present_tables:
         fail(f"no Parquet artefacts under {root}. Run `make run-all` first.")

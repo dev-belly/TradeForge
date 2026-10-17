@@ -15,6 +15,7 @@ from typing import Any
 import yaml
 
 from ..domain.exceptions import ConfigurationError
+from .resources import default_resource_dir
 
 DEFAULT_CONFIG_DIR = Path("configs")
 
@@ -48,9 +49,9 @@ def load_yaml(path: Path | str) -> dict[str, Any]:
     return payload
 
 
-def load_configs(directory: Path | str = DEFAULT_CONFIG_DIR) -> dict[str, dict[str, Any]]:
+def load_configs(directory: Path | str | None = None) -> dict[str, dict[str, Any]]:
     """Load every `configs/*.yaml` file, keyed by stem."""
-    root = Path(directory)
+    root = default_resource_dir("configs") if directory is None else Path(directory)
     if not root.is_dir():
         raise ConfigurationError(f"config directory not found: {root}")
     configs: dict[str, dict[str, Any]] = {}

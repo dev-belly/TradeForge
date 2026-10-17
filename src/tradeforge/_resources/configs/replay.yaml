@@ -1,0 +1,26 @@
+# Historical replay configuration.
+#
+# Replay is counterfactual: our simulated orders do NOT alter the future event
+# stream. Every run records counterfactual_mode = "replay_approximation".
+
+replay:
+  counterfactual_mode: "replay_approximation"
+  # STRICT | WARN | REPAIR for the streaming event validator.
+  validation_mode: "STRICT"
+  # Events are consumed lazily; this only bounds defensive buffering.
+  max_buffered_events: 1000
+  # Snapshot cadence: 0 disables periodic snapshots (event-driven only).
+  snapshot_interval_ns: 1000000000     # 1 second
+  # Hard stop for runaway experiments.
+  max_events: 5000000
+
+# Guards are simulation guardrails, NOT a production risk system.
+guards:
+  # Must exceed parent_order.quantity_base, otherwise the end-of-window sweep is
+  # rejected and the parent silently finishes unfilled.
+  max_child_order_base: 25000
+  max_notional: 5000000.0
+  max_participation: 0.10
+  max_open_orders: 25
+  max_inventory_base: 100000
+  kill_switch_enabled: true

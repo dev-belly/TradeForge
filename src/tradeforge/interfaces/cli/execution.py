@@ -18,7 +18,6 @@ from ...infrastructure.logging import configure_logging
 from ..console import caveat_block, provenance_block, render_mapping, render_table
 from ..reports import HtmlReportBuilder
 from .shared import (
-    DEFAULT_CONFIG_DIR,
     ConfigDir,
     attribution_rows,
     benchmark_rows,
@@ -37,7 +36,7 @@ def version() -> None:
     typer.echo(f"tradeforge {__version__}")
 
 
-def doctor(configs_dir: ConfigDir = DEFAULT_CONFIG_DIR) -> None:
+def doctor(configs_dir: ConfigDir = None) -> None:
     """Check that the environment and configuration are usable."""
     typer.echo("Configuration")
     try:
@@ -84,7 +83,7 @@ def run(
         str | None,
         typer.Option("--queue-policy", help="optimistic|neutral|conservative"),
     ] = None,
-    configs_dir: ConfigDir = DEFAULT_CONFIG_DIR,
+    configs_dir: ConfigDir = None,
     json_output: Annotated[
         bool, typer.Option("--json", help="Emit JSON instead of tables.")
     ] = False,
@@ -141,7 +140,7 @@ def run(
     typer.echo(caveat_block(report.caveats))
 
 
-def demo(configs_dir: ConfigDir = DEFAULT_CONFIG_DIR) -> None:
+def demo(configs_dir: ConfigDir = None) -> None:
     """Run the four algorithms on synthetic data and compare them.
 
     Works with zero downloads and zero API keys. The data is SYNTHETIC and every
@@ -222,7 +221,7 @@ def report(
     seeds: Annotated[
         int, typer.Option("--seeds", help="Sessions per cell for the experiment grid.")
     ] = 3,
-    configs_dir: ConfigDir = DEFAULT_CONFIG_DIR,
+    configs_dir: ConfigDir = None,
 ) -> None:
     """Render self-contained HTML reports.
 
