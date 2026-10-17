@@ -1,0 +1,27 @@
+# Queue model configuration.
+#
+# EXACT requires L3/MBO order identity. With L2/MBP data the queue position is
+# NOT observable and only `approximate` is legal.
+
+queue:
+  # exact | approximate
+  mode: "approximate"
+  # Used only when mode == approximate.
+  # optimistic   : unexplained level decrease is assumed BEHIND our order
+  # neutral      : split proportionally to our share of the visible level
+  # conservative : unexplained level decrease is assumed AHEAD of our order
+  cancel_ahead_policy: "neutral"
+
+  # When our order is added to a level, assume it joins behind the visible size.
+  join_at_back: true
+
+  # Minimum shares ahead before a passive fill is considered possible.
+  min_queue_ahead_base: 0
+
+  # If true, a trade at our price can only fill our order once the estimated
+  # queue ahead is exhausted. Never allow "price touched => filled".
+  require_queue_exhaustion: true
+
+# Sensitivity grid used by the queue-sensitivity experiment.
+sensitivity:
+  policies: ["optimistic", "neutral", "conservative"]

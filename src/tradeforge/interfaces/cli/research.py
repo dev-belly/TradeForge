@@ -18,7 +18,7 @@ from ...ml import (
 )
 from ...research import ExperimentRegistry, build_experiment_specs, run_experiment
 from ..console import caveat_block, render_mapping, render_table
-from .shared import DEFAULT_CONFIG_DIR, ConfigDir, harness_for, json_dumps
+from .shared import ConfigDir, harness_for, json_dumps
 
 __all__ = ["fill_probability", "list_experiments", "register", "run_experiments"]
 
@@ -27,7 +27,7 @@ ml_app = typer.Typer(help="Fit and evaluate fill-probability baselines.", no_arg
 
 
 @research_app.command("list")
-def list_experiments(configs_dir: ConfigDir = DEFAULT_CONFIG_DIR) -> None:
+def list_experiments(configs_dir: ConfigDir = None) -> None:
     """List the pre-registered experiment grids."""
     specs = build_experiment_specs(harness_for(configs_dir).configs)
     rows = [
@@ -43,7 +43,7 @@ def run_experiments(
     seeds: Annotated[int, typer.Option("--seeds", help="Number of sessions per cell.")] = 3,
     n_resamples: Annotated[int, typer.Option("--resamples")] = 2000,
     output: Annotated[Path, typer.Option("--output")] = Path("artifacts/research"),
-    configs_dir: ConfigDir = DEFAULT_CONFIG_DIR,
+    configs_dir: ConfigDir = None,
 ) -> None:
     """Run experiment grids and record every result, including the losses."""
     configure_logging(level="WARNING")
@@ -111,7 +111,7 @@ def run_experiments(
 @ml_app.command("fill-probability")
 def fill_probability(
     seed: Annotated[int | None, typer.Option("--seed")] = None,
-    configs_dir: ConfigDir = DEFAULT_CONFIG_DIR,
+    configs_dir: ConfigDir = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Fit the fill-probability baselines on a purged time split."""

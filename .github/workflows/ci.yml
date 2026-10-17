@@ -49,6 +49,27 @@ jobs:
       - name: Replay the saved public-market matching case without network access
         run: python tools/replay_public_depth.py data/examples/public-depth-20261013.json.gz --out artifacts/public-depth-ci
 
+  distribution:
+    name: Installed wheel (${{ matrix.os }}, Python 3.12)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build the source archive and its wheel
+        run: |
+          python -m pip install build
+          python -m build --outdir dist
+      - name: Exercise the installed Python reference backend outside the source tree
+        run: python tools/check_distribution.py dist
+
   cpp:
     name: C++ core (Release, unit tests, differential)
     runs-on: ubuntu-latest

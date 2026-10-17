@@ -31,6 +31,12 @@ python -m pip install -e ".[dev]"
 make demo
 ```
 
+When defaults are requested, an existing `configs/` or `sql/` directory in the working
+directory takes priority. Elsewhere, the installed package supplies the same
+default configuration and seven analytical queries. Explicit `--configs PATH`
+and `--sql-dir PATH` arguments always use that path; a missing or incomplete
+explicit directory never silently falls back to bundled resources.
+
 No downloads, no API keys, no network. `make demo` generates a deterministic
 synthetic session, reconstructs the book from the event stream, runs four
 execution algorithms in two placement styles, and prints the cost table.

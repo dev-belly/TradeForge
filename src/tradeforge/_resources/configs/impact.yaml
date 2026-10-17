@@ -1,0 +1,23 @@
+# Market impact model.
+#
+# SIMPLIFIED RESEARCH APPROXIMATION. This is not a calibrated venue-specific
+# impact curve, and TradeForge never claims otherwise.
+
+impact:
+  model: "square_root"      # none | linear | square_root
+  # impact_bps = k * sigma_bps * sqrt(participation_rate)  (square_root)
+  # impact_bps = k * sigma_bps * participation_rate         (linear)
+  k: 1.0
+  # Fraction of total impact that is permanent (persists after the order).
+  permanent_fraction: 0.5
+  # Volatility used for scaling; realized from past data only (leakage-safe).
+  sigma_source: "rolling_past"
+  sigma_lookback_ns: 600000000000     # 10 minutes
+  # Floor/caps in bps to keep the approximation inside a sane range.
+  min_bps: 0.0
+  max_bps: 100.0
+
+# Participation grid for the capacity sensitivity experiment.
+# Reported as a sensitivity estimate, never as "capacity = $X".
+capacity_sensitivity:
+  participation_rates: [0.001, 0.005, 0.01, 0.05, 0.10]

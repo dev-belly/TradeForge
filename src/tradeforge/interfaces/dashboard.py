@@ -38,6 +38,7 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from tradeforge.infrastructure.cpp_bridge import core_status  # noqa: E402
+from tradeforge.infrastructure.resources import default_resource_dir  # noqa: E402
 from tradeforge.storage import DuckDbStore, StoreStatus  # noqa: E402
 
 ARTIFACT_ROOT = Path("artifacts/runs")
@@ -61,7 +62,7 @@ TABS = (
 
 
 def _store() -> DuckDbStore:
-    return DuckDbStore(ARTIFACT_ROOT, sql_dir=SQL_DIR)
+    return DuckDbStore(ARTIFACT_ROOT, sql_dir=default_resource_dir("sql"))
 
 
 def _empty_state(message: str, command: str) -> None:

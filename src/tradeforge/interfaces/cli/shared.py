@@ -19,7 +19,7 @@ from ...infrastructure.config import DEFAULT_CONFIG_DIR, load_configs, validate_
 
 #: The one place the `--configs` option is declared. Re-annotating it at a call
 #: site produces a Typer MultipleTyperAnnotationsError, so it is a named type.
-ConfigDir = Annotated[Path, typer.Option("--configs", help="Configuration directory.")]
+ConfigDir = Annotated[Path | None, typer.Option("--configs", help="Configuration directory.")]
 
 __all__ = [
     "DEFAULT_CONFIG_DIR",
@@ -34,14 +34,14 @@ __all__ = [
 ]
 
 
-def load_all_configs(configs_dir: Path) -> dict[str, Any]:
+def load_all_configs(configs_dir: Path | None) -> dict[str, Any]:
     """Load and validate every configuration file, or raise."""
     configs = load_configs(configs_dir)
     validate_required(configs)
     return configs
 
 
-def harness_for(configs_dir: Path) -> ExecutionHarness:
+def harness_for(configs_dir: Path | None) -> ExecutionHarness:
     return ExecutionHarness(load_all_configs(configs_dir))
 
 

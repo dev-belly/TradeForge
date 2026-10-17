@@ -62,7 +62,7 @@ tradeforge = "tradeforge.interfaces.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-tradeforge = ["py.typed"]
+tradeforge = ["py.typed", "_resources/configs/*.yaml", "_resources/sql/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

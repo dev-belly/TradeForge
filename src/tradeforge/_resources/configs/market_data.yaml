@@ -1,0 +1,45 @@
+# Market data source configuration.
+# No capability may be claimed beyond what `data_type` declares.
+
+dataset:
+  name: "tradeforge-sample-synthetic-v1"
+  version: "1.0.0"
+  # L1 | L2_MBP | L3_MBO
+  data_type: "L2_MBP"
+  # Provenance shown in every report. Never set this to a real venue name
+  # unless the data actually came from that venue.
+  provenance: "SYNTHETIC - deterministic generator, NOT real market data"
+  redistributable: true
+  license: "CC0-1.0 (generated, no third-party content)"
+
+source:
+  adapter: "synthetic"
+  symbol: "SYNTH"
+  # Adapter-specific options.
+  options:
+    seed: 20260908
+    # ~60k events at 10-80ms gaps spans ~45 minutes, longer than the 30-minute
+    # parent window in configs/execution.yaml. A stream shorter than the window
+    # would silently truncate every execution.
+    n_events: 60000
+    start_time_ns: 34200000000000   # 09:30:00.000000000
+    tick_size: "0.01"
+    reference_price: "100.00"
+    initial_depth_levels: 5
+    level_size_base: 300
+
+instrument:
+  symbol: "SYNTH"
+  tick_size: "0.01"
+  lot_size: 1
+  price_scale: 2
+  currency: "USD"
+  # ADV is only used by the impact model; keep it explicit, never implied.
+  adv_base: 2000000
+  price_band_lower_ticks: 5000
+  price_band_upper_ticks: 20000
+
+# Where normalized events are written (parquet).
+storage:
+  normalized_dir: "data/normalized"
+  raw_dir: "data/raw"
