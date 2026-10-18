@@ -10,7 +10,7 @@ from ...data.registry import available_adapters, create_adapter
 from ...data.validation import EventValidator, ValidationSettings
 from ...domain.enums import ValidationMode
 from ..console import render_mapping, render_table
-from .shared import DEFAULT_CONFIG_DIR, ConfigDir, harness_for
+from .shared import ConfigDir, harness_for
 
 __all__ = ["adapters", "inspect_source", "register"]
 
@@ -32,7 +32,7 @@ def adapters() -> None:
 def inspect_source(
     adapter: Annotated[str, typer.Option("--adapter")] = "synthetic",
     limit: Annotated[int, typer.Option("--limit", help="Events to read.")] = 2000,
-    configs_dir: ConfigDir = DEFAULT_CONFIG_DIR,
+    configs_dir: ConfigDir = None,
 ) -> None:
     """Summarise a source: declared tier, event mix, and validation issues."""
     configs = harness_for(configs_dir).configs

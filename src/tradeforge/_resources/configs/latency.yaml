@@ -1,0 +1,24 @@
+# Latency model configuration.
+#
+# These values are SCENARIOS, not measurements. TradeForge has no hardware
+# measurement capability and makes no claim about real-world latency.
+
+latency:
+  basis: "scenario"          # scenario | observed (observed requires receive_timestamp)
+  model: "constant"          # constant | lognormal
+  # Applied to: decision -> order arrival at the venue.
+  components_ns:
+    decision: 0
+    network: 500000          # 500 microseconds
+    exchange_processing: 50000
+  # Used when model == lognormal.
+  lognormal:
+    sigma: 0.5
+    seed: 7
+
+# Latency must advance market time: events between decision and arrival
+# continue to be processed. Sleeping is forbidden (enforced by a test).
+
+sensitivity:
+  # Values in nanoseconds. 0 = instantaneous (unrealistic upper bound on skill).
+  grid_ns: [0, 100000, 500000, 1000000, 5000000, 10000000]

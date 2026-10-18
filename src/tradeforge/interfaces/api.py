@@ -28,8 +28,9 @@ from pydantic import BaseModel, Field
 from ..application.harness import ExecutionHarness, RunRequest
 from ..data.registry import available_adapters
 from ..domain.exceptions import TradeForgeError
-from ..infrastructure.config import DEFAULT_CONFIG_DIR, load_configs, validate_required
+from ..infrastructure.config import load_configs, validate_required
 from ..infrastructure.cpp_bridge import core_status
+from ..infrastructure.resources import default_resource_dir
 from ..research import build_experiment_specs
 from ..storage import DuckDbStore
 
@@ -145,7 +146,7 @@ def create_execution(body: RunRequestBody) -> dict[str, Any]:
 @app.get("/queries")
 def list_queries() -> dict[str, Any]:
     """The packaged analytical queries, with the question each one answers."""
-    store = DuckDbStore(DEFAULT_ARTIFACT_ROOT, sql_dir=DEFAULT_SQL_DIR)
+    store = DuckDbStore(DEFAULT_ARTIFACT_ROOT, sql_dir=default_resource_dir("sql"))
     queries = store.available_queries()
     return {
         "queries": [
@@ -166,7 +167,7 @@ def run_query(name: str) -> dict[str, Any]:
     request described a nonexistent query as a query that found nothing, and the
     answer depended on unrelated state.
     """
-    store = DuckDbStore(DEFAULT_ARTIFACT_ROOT, sql_dir=DEFAULT_SQL_DIR)
+    store = DuckDbStore(DEFAULT_ARTIFACT_ROOT, sql_dir=default_resource_dir("sql"))
 
     # 1. Does the query exist? A property of the repository, not of the store.
     if name.removesuffix(".sql") not in store.available_queries():
@@ -259,7 +260,7 @@ def _report_subdirectory(directory: str) -> Path:
 
 
 def _configs() -> dict[str, Any]:
-    configs = load_configs(DEFAULT_CONFIG_DIR)
+    configs = load_configs()
     validate_required(configs)
     return configs
 
