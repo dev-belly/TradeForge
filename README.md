@@ -26,10 +26,60 @@ paired statistics, and a provenance block on every artefact.
 
 ## Sixty-second tour
 
+Start in an empty working directory with **Git and Python 3.11+** installed.
+Cloning and package installation need network access. The commands below install
+the normal runtime package; environment activation is unnecessary.
+
+**Linux / macOS**
+
 ```bash
-python -m pip install -e ".[dev]"
-make demo
+git clone https://github.com/dev-belly/TradeForge.git
+cd TradeForge
+python3 -m venv .venv
+.venv/bin/python -m pip install .
+.venv/bin/python -m tradeforge.interfaces.cli doctor
+.venv/bin/python -m tradeforge.interfaces.cli demo
+.venv/bin/python -m tradeforge.interfaces.cli db list
 ```
+
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/dev-belly/TradeForge.git
+cd TradeForge
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install .
+.\.venv\Scripts\python.exe -m tradeforge.interfaces.cli doctor
+.\.venv\Scripts\python.exe -m tradeforge.interfaces.cli demo
+.\.venv\Scripts\python.exe -m tradeforge.interfaces.cli db list
+```
+
+A clean Python installation uses the **Python reference backend**. Building the
+C++ backend is optional. Expect `doctor` to print configuration checks and
+`backend: python-reference`, `demo` to print the eight policy/style rows shown
+below, and `db list` to list seven analytical queries, from
+`01_execution_summary` through `07_data_quality_summary`.
+
+These three checks print to the terminal; they do not create report or Parquet
+files. To save one self-contained HTML report, run:
+
+```bash
+# Linux / macOS
+.venv/bin/python -m tradeforge.interfaces.cli report --policies twap --styles passive --output artifacts/reports
+```
+
+```powershell
+# Windows
+.\.venv\Scripts\python.exe -m tradeforge.interfaces.cli report --policies twap --styles passive --output artifacts/reports
+```
+
+Open `artifacts/reports/index.html` in a browser; it links to
+`artifacts/reports/execution-twap-passive.html`. Both paths are relative to the
+checkout directory. Report generation also works offline after installation.
+
+The `make` commands later in this README are optional developer shortcuts from
+the checkout. They require Make; development tooling can be installed with
+`python -m pip install -e ".[dev]"` using your environment's Python.
 
 When defaults are requested, an existing `configs/` or `sql/` directory in the working
 directory takes priority. Elsewhere, the installed package supplies the same
@@ -37,9 +87,9 @@ default configuration and seven analytical queries. Explicit `--configs PATH`
 and `--sql-dir PATH` arguments always use that path; a missing or incomplete
 explicit directory never silently falls back to bundled resources.
 
-No downloads, no API keys, no network. `make demo` generates a deterministic
-synthetic session, reconstructs the book from the event stream, runs four
-execution algorithms in two placement styles, and prints the cost table.
+After installation, `demo` needs no API keys, data downloads or network. It generates
+a deterministic synthetic session, reconstructs the book from the event stream,
+runs four execution algorithms in two placement styles, and prints the cost table.
 
 ```
 SYNTHETIC DATA - deterministic generator, not a real venue.
