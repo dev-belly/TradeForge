@@ -361,6 +361,27 @@ for each, is in [`docs/design-review.md`](docs/design-review.md).
 
 ---
 
+## Feedback and contributions
+
+Report reproducible defects or first-run errors in [Issues](https://github.com/dev-belly/TradeForge/issues).
+Include:
+
+* The git commit (`git rev-parse HEAD`) or package version
+  (`python -m tradeforge.interfaces.cli version`), full command and working
+  directory, and Python / OS versions.
+* The output of `python -m tradeforge.interfaces.cli doctor`, including the actual
+  `backend`. Use the same Python interpreter and `--configs PATH`, if supplied,
+  as the failing command.
+* The seed and configuration files or changes. `run` accepts `--seed`; `demo`
+  uses `source.options.seed` in `market_data.yaml` from the selected configs.
+* The smallest public or synthetic input fixture that reproduces the issue,
+  expected behavior, and actual output, error or traceback.
+
+For adapters, execution policies, TCA metrics or C++ changes, start with the
+[extending guide](docs/guides/extending.md) and its existing test conventions.
+
+---
+
 ## Requirements
 
 Python ≥ 3.11. The C++ core needs a C++20 compiler and CMake ≥ 3.20; it is
