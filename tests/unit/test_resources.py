@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from tradeforge.domain.exceptions import ConfigurationError
 from tradeforge.infrastructure.config import load_configs
@@ -117,3 +120,31 @@ def test_explicit_missing_directories_never_use_defaults(
     result = cli(tmp_path, *arguments)
     assert result.returncode != 0
     assert arguments[-1] in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("quantity", ["0", "-1", "nan", "inf", "-inf"])
+def test_cli_rejects_invalid_parent_quantities(tmp_path: Path, quantity: str) -> None:
+    result = cli(tmp_path, "run", "--quantity", quantity, "--json")
+    assert result.returncode != 0
+    assert "quantity" in result.stdout + result.stderr
+    assert "Traceback" not in result.stdout + result.stderr
+    assert "requested_base" not in result.stdout
+
+
+def test_cli_run_keeps_a_positive_quantity_override(tmp_path: Path) -> None:
+    result = cli(tmp_path, "run", "--quantity", "100", "--json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["metrics"]["requested_base"] == 100
+
+
+def test_cli_reports_invalid_configured_quantity_without_a_traceback(tmp_path: Path) -> None:
+    configs = tmp_path / "configs"
+    shutil.copytree(ROOT / "configs", configs)
+    path = configs / "execution.yaml"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    payload["parent_order"]["quantity_base"] = 0
+    path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+    result = cli(tmp_path, "run", "--json")
+    assert result.returncode != 0
+    assert "quantity_base must be a positive integer" in result.stdout + result.stderr
+    assert "Traceback" not in result.stdout + result.stderr
