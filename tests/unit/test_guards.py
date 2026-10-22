@@ -37,7 +37,7 @@ def test_explicitly_disabled_kill_switch_remains_supported():
 
 @pytest.mark.parametrize("quantity", [0, -1, True, 1.5, float("nan"), float("inf"), -float("inf")])
 def test_invalid_parent_quantity_override_is_rejected(configs, quantity):
-    with pytest.raises(ConfigurationError, match="quantity_base.*positive integer"):
+    with pytest.raises(ConfigurationError, match=r"quantity_base.*positive integer"):
         ExecutionHarness(configs).parent_order(RunRequest(quantity_base=quantity))
 
 
