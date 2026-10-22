@@ -182,7 +182,11 @@ class ExecutionHarness:
         session_start = get_int(source_options, "start_time_ns", 0)
         start_ns = session_start + get_int(parent_cfg, "start_offset_ns", 0)
         end_ns = start_ns + get_int(parent_cfg, "end_offset_ns", 0)
-        quantity = request.quantity_base or get_int(parent_cfg, "quantity_base", 10_000)
+        quantity = request.quantity_base
+        if quantity is None:
+            quantity = get_int(parent_cfg, "quantity_base", 10_000)
+        if type(quantity) is not int or quantity <= 0:
+            raise ConfigurationError("parent quantity_base must be a positive integer")
         return ParentOrder(
             parent_order_id=request.run_id or f"{request.label()}@{start_ns}",
             symbol=spec.symbol,

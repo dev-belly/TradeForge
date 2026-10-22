@@ -22,6 +22,7 @@ from .shared import (
     attribution_rows,
     benchmark_rows,
     fail,
+    guarded,
     harness_for,
     json_dumps,
 )
@@ -74,7 +75,7 @@ def run(
     style: Annotated[str, typer.Option("--style", help="passive|aggressive|adaptive")] = "passive",
     seed: Annotated[int | None, typer.Option("--seed", help="Override the session seed.")] = None,
     quantity: Annotated[
-        int | None, typer.Option("--quantity", help="Parent size in base units.")
+        int | None, typer.Option("--quantity", min=1, help="Positive parent size in base units.")
     ] = None,
     latency_ns: Annotated[
         int | None, typer.Option("--latency-ns", help="Network latency scenario.")
@@ -100,7 +101,7 @@ def run(
         queue_policy=queue_policy,
         run_id=f"cli-{policy}-{style}",
     )
-    context = harness.run(request)
+    context = guarded(harness.run, request)
     if context.tca is None or context.result is None:
         fail("the run produced no TCA report")
         return

@@ -35,6 +35,27 @@ def test_explicitly_disabled_kill_switch_remains_supported():
         GuardConfig(max_notional=float("nan"))
 
 
+@pytest.mark.parametrize("quantity", [0, -1, True, 1.5, float("nan"), float("inf"), -float("inf")])
+def test_invalid_parent_quantity_override_is_rejected(configs, quantity):
+    with pytest.raises(ConfigurationError, match=r"quantity_base.*positive integer"):
+        ExecutionHarness(configs).parent_order(RunRequest(quantity_base=quantity))
+
+
+@pytest.mark.parametrize("quantity", [0, -1, True, 1.5, float("nan"), float("inf"), -float("inf")])
+def test_invalid_configured_parent_quantity_is_rejected(configs, quantity):
+    cfg = deepcopy(configs)
+    cfg["execution"]["parent_order"]["quantity_base"] = quantity
+    with pytest.raises(ConfigurationError, match="quantity_base"):
+        ExecutionHarness(cfg).parent_order(RunRequest())
+
+
+def test_parent_quantity_defaults_only_when_the_override_is_absent(configs):
+    harness = ExecutionHarness(configs)
+    configured = configs["execution"]["parent_order"]["quantity_base"]
+    assert harness.parent_order(RunRequest()).quantity_base == configured
+    assert harness.parent_order(RunRequest(quantity_base=100)).quantity_base == 100
+
+
 @pytest.mark.parametrize("style", ["aggressive", "passive"])
 def test_max_notional_rejects_unpriced_policy_orders_after_pricing(configs, style):
     cfg = deepcopy(configs)
