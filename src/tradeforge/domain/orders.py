@@ -101,8 +101,8 @@ class Order:
 
     def apply_fill(self, quantity_base: int, *, at_ns: int) -> None:
         """Apply a (partial) fill and move the state machine accordingly."""
-        if quantity_base <= 0:
-            raise OrderStateError("fill quantity must be positive")
+        if type(quantity_base) is not int or quantity_base <= 0:
+            raise OrderStateError("fill quantity must be a positive integer")
         if quantity_base > self.remaining_base:
             raise OrderStateError(
                 f"fill {quantity_base} exceeds remaining {self.remaining_base} "
