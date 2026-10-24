@@ -219,6 +219,17 @@ class TestOrderStateMachine:
         with pytest.raises(OrderStateError):
             order.apply_fill(0, at_ns=2)
 
+    @pytest.mark.parametrize(
+        "quantity", [True, False, 0.5, 40.0, float("nan"), float("inf"), "40", None]
+    )
+    def test_invalid_fill_quantity_preserves_the_order(self, quantity):
+        order = self._order()
+        order.transition_to(OrderStatus.ACCEPTED, at_ns=1)
+        before = (order.filled_base, order.status, order.working_ns, order.terminal_ns)
+        with pytest.raises(OrderStateError, match="positive integer"):
+            order.apply_fill(quantity, at_ns=2)
+        assert (order.filled_base, order.status, order.working_ns, order.terminal_ns) == before
+
 
 class TestParentOrder:
     def test_completion_rate(self, parent_order):
