@@ -118,9 +118,9 @@ class Oms:
             queue_wait_ns=queue_wait_ns,
             sequence_id=sequence_id,
         )
+        order.apply_fill(quantity_base, at_ns=at_ns)
         self._next_fill_id += 1
         self._fills.append(fill)
-        order.apply_fill(quantity_base, at_ns=at_ns)
         self._inventory_base += order.side.sign * quantity_base
         if order.status is OrderStatus.FILLED and order.client_order_id in self._working:
             self._working.remove(order.client_order_id)
