@@ -77,6 +77,12 @@ Open `artifacts/reports/index.html` in a browser; it links to
 `artifacts/reports/execution-twap-passive.html`. Both paths are relative to the
 checkout directory. Report generation also works offline after installation.
 
+Each execution, experiment and ML report has a **Download JSON** link. It saves
+the report data from the same HTML file, including full numeric precision and
+the report's caveats or notes. The JSON has a `report` object for the underlying
+result and a `context` object for the displayed execution provenance or experiment
+environment. Keep this download with the HTML when reviewing a result.
+
 The `make` commands later in this README are optional developer shortcuts from
 the checkout. They require Make; development tooling can be installed with
 `python -m pip install -e ".[dev]"` using your environment's Python.

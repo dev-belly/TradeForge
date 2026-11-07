@@ -16,10 +16,13 @@ the TCA provenance, so the badge read "UNKNOWN" while the table said
 from __future__ import annotations
 
 import html
+import json
 import re
 import shutil
 import uuid
+from base64 import b64decode
 from collections.abc import Iterator
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -71,11 +74,35 @@ def _body(source: str) -> str:
     return html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " | ", body)))
 
 
+class _Downloads(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag == "a" and "download" in attributes:
+            self.links.append(attributes)
+
+
+def _downloaded_json(rendered):
+    parser = _Downloads()
+    parser.feed(rendered.path.read_text(encoding="utf-8"))
+    assert len(parser.links) == 1
+    link = parser.links[0]
+    assert link["download"] == rendered.path.with_suffix(".json").name
+    prefix = "data:application/json;charset=utf-8;base64,"
+    assert link["href"].startswith(prefix)
+    return json.loads(b64decode(link["href"].removeprefix(prefix), validate=True))
+
+
 class TestSelfContained:
     def test_no_external_references(self, rendered):
         """A report that needs a network connection will one day fail to render."""
         source = rendered.path.read_text(encoding="utf-8")
-        external = re.findall(r'(?:src|href)="(?!#)([^"]+)"', source)
+        external = re.findall(
+            r'(?:src|href)="(?!#|data:application/json;charset=utf-8;base64,)([^"]+)"', source
+        )
         assert not external, f"the report references external resources: {external}"
 
     def test_no_script_tags(self, rendered):
@@ -91,6 +118,24 @@ class TestSelfContained:
         source = rendered.path.read_text(encoding="utf-8")
         assert source.startswith("<!DOCTYPE html>")
         assert "</html>" in source
+
+
+def test_download_keeps_report_values_and_displayed_context(report_dir, report):
+    provenance = {
+        **report.tca.provenance,
+        "review_note": '中文, "quoted"\r\n</script><img src=x onerror=alert(1)>',
+    }
+    out = HtmlReportBuilder(report_dir).execution_report(
+        report.tca, run_id="download-check", provenance=provenance
+    )
+    downloaded = _downloaded_json(out)
+    assert downloaded == {
+        "report": out.payload,
+        "context": {"run_id": "download-check", "provenance": provenance},
+    }
+    assert list(report_dir.iterdir()) == [out.path]
+    source = out.path.read_text(encoding="utf-8")
+    assert "<script" not in source and "<img" not in source
 
 
 class TestProvenanceFirst:
@@ -148,6 +193,9 @@ class TestIndex:
         source = index.path.read_text(encoding="utf-8")
         for item in reports:
             assert item.path.name in source
+            assert _downloaded_json(item)["context"]["run_id"] == item.path.stem.removeprefix(
+                "execution-"
+            )
 
     def test_index_keeps_the_synthetic_disclaimer(self, report_dir, report):
         builder = HtmlReportBuilder(report_dir)
@@ -191,7 +239,13 @@ class TestExperimentReport:
         out = builder.experiment_report(result, environment={"git_commit": "abc1234"})
 
         source = out.path.read_text(encoding="utf-8")
-        assert not re.findall(r'(?:src|href)="(?!#)([^"]+)"', source)
+        assert not re.findall(
+            r'(?:src|href)="(?!#|data:application/json;charset=utf-8;base64,)([^"]+)"', source
+        )
+        assert _downloaded_json(out) == {
+            "report": out.payload,
+            "context": {"environment": {"git_commit": "abc1234"}},
+        }
         body = _body(source)
         assert "Paired comparisons" in body
         assert "abc1234" in body
@@ -246,7 +300,10 @@ class TestMlReport:
 
         out = HtmlReportBuilder(report_dir).ml_report(result)
         source_html = out.path.read_text(encoding="utf-8")
-        assert not re.findall(r'(?:src|href)="(?!#)([^"]+)"', source_html)
+        assert not re.findall(
+            r'(?:src|href)="(?!#|data:application/json;charset=utf-8;base64,)([^"]+)"', source_html
+        )
+        assert _downloaded_json(out) == {"report": out.payload, "context": {}}
         body = _body(source_html)
         assert "interval excludes zero" in body
         assert "Label-shuffle canary" in body
