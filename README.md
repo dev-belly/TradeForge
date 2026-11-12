@@ -363,7 +363,6 @@ for each, is in [`docs/design-review.md`](docs/design-review.md).
 | [`docs/data-capabilities.md`](docs/data-capabilities.md) | Capability matrix and the refusal semantics |
 | [`docs/adr/`](docs/adr) | Four architecture decision records |
 | [`docs/guides/`](docs/guides) | Getting started, data, execution, TCA, extending |
-| [`docs/interview-notes.md`](docs/interview-notes.md) | 120 questions the design must survive |
 
 ---
 

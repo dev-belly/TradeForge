@@ -36,7 +36,6 @@ TradeForge exists to answer those questions **honestly** on **event-level data**
 | User | What they get |
 |---|---|
 | Quant student | A runnable LOB: add/cancel/modify/trade → book → spread → depth. |
-| Quant interview candidate | `docs/interview-notes.md` + 120 Q&A tied to real code paths. |
 | Quant developer | Clean Python/C++ boundary, integer-tick domain, event-driven replay. |
 | Microstructure researcher | Feature engine with leakage-safe rolling windows, markouts, OFI. |
 | Execution quant | TWAP / VWAP / POV / IS baselines + full TCA attribution + sensitivity grids. |
