@@ -24,6 +24,15 @@ paired statistics, and a provenance block on every artefact.
 
 ---
 
+## Execution workbench
+
+Compare all 18 saved fee and latency scenarios and inspect fill rates and execution costs.
+
+[Workbench files](docs/workbench/)
+
+Open `docs/workbench/index.html` from a checkout to filter, drill into a record, and export CSV or JSON offline.
+Run `python docs/workbench/build_data.py --check` to verify the browser snapshot.
+
 ## Sixty-second tour
 
 Start in an empty working directory with **Git and Python 3.11+** installed.
