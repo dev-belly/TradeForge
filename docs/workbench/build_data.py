@@ -63,7 +63,13 @@ def build():
         delay_label = f"{delay / 1e6:g} ms"
         fee_label = f"{fee:g} bp"
         identifier = f"{row['method']}-{delay}-{fee:g}"
-        fee_cost = row["executed_cost_bps"] - row["price_shortfall_bps"]
+        total_cost = row["executed_cost_bps"]
+        price_cost = row["price_shortfall_bps"]
+        fee_cost = (
+            total_cost - price_cost
+            if total_cost is not None and price_cost is not None
+            else None
+        )
         records.append(
             {
                 "id": identifier,
@@ -74,12 +80,12 @@ def build():
                     "delay": delay,
                     "fee": fee,
                     "fill": row["fill_ratio"],
-                    "cost": row["executed_cost_bps"],
-                    "price": row["price_shortfall_bps"],
+                    "cost": total_cost,
+                    "price": price_cost,
                 },
                 "facts": [
-                    fact("含手续费成本", row["executed_cost_bps"], "bps"),
-                    fact("价格偏离", row["price_shortfall_bps"], "bps"),
+                    fact("含手续费成本", total_cost, "bps"),
+                    fact("价格偏离", price_cost, "bps"),
                     fact("手续费折算成本", fee_cost, "bps"),
                     fact(
                         "已成交／请求", f"{row['filled_base']:,} / {row['requested_base']:,} DOGE"
@@ -90,14 +96,14 @@ def build():
                 ],
                 "charts": {
                     "components": [
-                        {"label": "价格偏离", "value": row["price_shortfall_bps"]},
+                        {"label": "价格偏离", "value": price_cost},
                         {"label": "手续费折算", "value": fee_cost},
                     ],
                 },
                 "sections": [
                     {
                         "title": "成本口径",
-                        "text": "成本按已成交数量计算。比较两种执行方式时，同时看含费成本与成交率。",
+                        "text": "成本按已成交数量计算。零成交的含费成本和价格偏离显示为缺失。比较两种执行方式时，同时看含费成本与成交率。",
                     }
                 ],
             }
@@ -182,6 +188,7 @@ def build():
                 "mode": "detail",
                 "format": "bps",
                 "caption": "以参考中间价折算价格偏离与手续费。",
+                "empty": "当前情景没有可用的已成交成本。",
             },
         ],
         "sourceNote": "样例取自一段真实公开 L2 盘口。手续费和延迟为情景假设，100 ms 聚合数据看不到批次内部更新；模拟成交沿用观测到的后续盘口。",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import runpy
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,30 @@ def test_public_episode_is_continuous_and_matching_outputs_reproduce(tmp_path):
                 * 10000
             )
             assert row["executed_cost_bps"] == pytest.approx(actual, abs=1e-8)
+
+
+def test_workbench_preserves_zero_fill_and_undefined_costs(monkeypatch):
+    builder = runpy.run_path(str(CAPTURE.parents[2] / "docs/workbench/build_data.py"))["build"]
+    read_json = builder.__globals__["read_json"]
+
+    def no_fill(path):
+        evidence = read_json(path)
+        evidence["rows"][0].update(
+            fill_ratio=0,
+            filled_base=0,
+            executed_notional_quote=0,
+            fees_quote=0,
+            executed_cost_bps=None,
+            price_shortfall_bps=None,
+        )
+        return evidence
+
+    monkeypatch.setitem(builder.__globals__, "read_json", no_fill)
+    record = builder()["records"][0]
+    assert record["values"]["fill"] == 0
+    assert record["values"]["cost"] is None
+    assert record["facts"][2]["value"] is None
+    assert all(bar["value"] is None for bar in record["charts"]["components"])
 
 
 def test_missing_depth_packet_cannot_be_silently_repaired(tmp_path):
